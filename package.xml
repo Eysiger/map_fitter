@@ -1,0 +1,27 @@
+<package>
+  <!-- Package Metadata -->
+  <name>map_fitter</name>
+  <maintainer email="rkaeslin@student.ethz.ch">Roman Käslin</maintainer>
+  <description>
+    Finds optimal transformation of a grid_map to match with another grid_map
+  </description>
+  <version>0.0.0</version>
+  <license>BSD</license>
+
+  <!-- Required by Catkin -->
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <!-- Package Dependencies -->
+  <build_depend>roscpp</build_depend>
+  <build_depend>message_generation</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>tf</build_depend>
+  <build_depend>grid_map</build_depend>
+ 
+  <run_depend>roscpp</run_depend>
+  <run_depend>message_runtime</run_depend>
+  <run_depend>sensor_msgs</run_depend>
+  <run_depend>tf</run_depend>
+  <run_depend>grid_map</run_depend>
+
+</package>

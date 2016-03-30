@@ -1,2 +1,2 @@
-# map_fitter
-Finds optimal transformation of a grid_map to match with another grid_map
+# cloud_fitter
+Finds optimal transformation of a point cloud to match with another point cloud
