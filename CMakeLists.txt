@@ -14,7 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   tf
   message_generation
-  grid_map
+  grid_map_core
+  grid_map_ros
 )
 
 ## Generate messages in the 'msg' folder
@@ -53,6 +54,7 @@ catkin_package(
 include_directories(include ${catkin_INCLUDE_DIRS})
 include_directories(${catkin_INCLUDE_DIRS})
 include_directories(${roscpp_INCLUDE_DIRS})
+include_directories(${EIGEN3_INCLUDE_DIR})
 # include_directories(${PCL_INCLUDE_DIRS})
 
 # Define an execuable target called hello_world_node 
@@ -61,6 +63,7 @@ add_executable(map_fitter src/MapFitter.cpp)
 # add_executable(tf_listener  src/tfListener.cpp)
 
 # Link the hello_world_node target against the libraries used by roscpp
+target_link_libraries(map_fitter ${catkin_LIBRARIES})
 target_link_libraries(map_fitter ${catkin_LIBRARIES})
 # target_link_libraries(map_fitter ${PCL_LIBRARIES})
 # target_link_libraries(tf_listener ${catkin_LIBRARIES})

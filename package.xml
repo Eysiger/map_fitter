@@ -17,11 +17,13 @@
   <build_depend>sensor_msgs</build_depend>
   <build_depend>tf</build_depend>
   <build_depend>grid_map</build_depend>
+  <build_depend>eigen</build_depend>
  
   <run_depend>roscpp</run_depend>
   <run_depend>message_runtime</run_depend>
   <run_depend>sensor_msgs</run_depend>
   <run_depend>tf</run_depend>
   <run_depend>grid_map</run_depend>
+  <run_depend>eigen</run_depend>
 
 </package>
