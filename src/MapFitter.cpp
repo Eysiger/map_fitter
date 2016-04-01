@@ -62,11 +62,11 @@ float Correlation(GridMap shifted_map, GridMap reference_map, grid_map::Position
   }
 
   if (matches > points*req_overlap) {
-	cout << matches <<" matching points of " << points <<" points. ";
+	//cout << matches <<" matching points of " << points <<" points. ";
 	return score/matches;
   }
   else {
-	cout << "Not enough matching points: " << matches <<" matches of " << points <<" points. ";
+	//cout << "Not enough matching points: " << matches <<" matches of " << points <<" points. ";
 	return 1.0;
   }
 }
@@ -103,6 +103,10 @@ void ExhaustiveSearch(GridMap map, GridMap reference_map, tf::TransformBroadcast
   size(1) = (position(1) - (-1))/reference_map.getResolution();
   //float correlation[reference_map.getSize()(0)][reference_map.getSize()(1)][360/angle];
 
+  ros::Time time = ros::Time::now();
+  float best_corr = 1;
+  grid_map::Position best_position;
+  float best_theta;
   GridMap correlation_map({"correlation","rotation"});
   correlation_map.setGeometry(reference_map.getLength(), reference_map.getResolution()*every,
                               reference_map.getPosition());
@@ -115,7 +119,7 @@ void ExhaustiveSearch(GridMap map, GridMap reference_map, tf::TransformBroadcast
 	{
 		float corr = Correlation(Shift(xy_position, theta, map, broadcaster), reference_map, xy_position, theta);
 		//correlation[index(0)][index(1)][int(theta/angle)] = corr;
-  		cout << corr << " Correlation for " << xy_position.transpose() <<", " << theta ;
+  		//cout << corr << " Correlation for " << xy_position.transpose() <<", " << theta ;
 		
 		if (correlation_map.isInside(xy_position)) {
 			Index correlation_index;
@@ -124,22 +128,29 @@ void ExhaustiveSearch(GridMap map, GridMap reference_map, tf::TransformBroadcast
 			if (((valid == false) || (corr*10 < correlation_map.at("correlation", correlation_index) )) && corr != 1) {
 				correlation_map.at("correlation", correlation_index) = corr*10;
 				correlation_map.at("rotation", correlation_index) = theta;
-				cout << " correlation set" << endl;
+				//cout << " correlation set" << endl;
+				if (corr < best_corr) {
+					best_corr = corr;
+					best_position = xy_position;
+					best_theta = theta;
+				}
 			}
-			else {cout << " worse" << endl;}
+			//else {cout << " worse" << endl;}
 		}
-		else { cout << " outside" << endl;}
+		//else { cout << " outside" << endl;}
 	}
 	grid_map_msgs::GridMap correlation_msg;
   	GridMapRosConverter::toMessage(correlation_map, correlation_msg);
   	correlation_pub.publish(correlation_msg);
   }
-
+  cout << "Best correlation " << best_corr << " at " << best_position.transpose() << " and theta " << best_theta << endl;
   ROS_INFO("done");
+  ros::Duration duration = time - ros::Time::now();
+  cout << "Time used: " << duration.toSec();
 }
 
 void GridMap_callback(const grid_map_msgs::GridMap::ConstPtr& msg, tf::TransformBroadcaster broadcaster) {
-  ROS_INFO("Recieved my first grid_map.");
+  ROS_INFO("Recieved grid_map.");
   GridMap map;
   GridMapRosConverter::fromMessage(*msg, map);
   
