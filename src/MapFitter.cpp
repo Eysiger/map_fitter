@@ -2,7 +2,8 @@
 #include <cstdlib>
 #include <math.h>
 #include <grid_map_core/GridMap.hpp>
-#include <grid_map_core/iterators/GridMapIterator5.hpp>
+#include <grid_map_core/iterators/GridMapIteratorSparse.hpp>
+#include <grid_map_core/iterators/SubmapIteratorSparse.hpp>
 #include <grid_map_ros/GridMapRosConverter.hpp>
 #include <grid_map_msgs/GridMap.h>
 #include <Eigen/Core>
@@ -25,7 +26,7 @@ void tfBroadcast(tf::TransformBroadcaster broadcaster) {
 
 float Correlation(GridMap shifted_map, GridMap reference_map, grid_map::Position position, float theta) {
   int every = 5;
-  float req_overlap = 0.5;
+  float req_overlap = 0.75;
 
   float correlation = 0;
   float score = 0;
@@ -33,16 +34,16 @@ float Correlation(GridMap shifted_map, GridMap reference_map, grid_map::Position
   int matches = 0;
 
   grid_map::Matrix& data = shifted_map["elevation"];
-  for (grid_map::GridMapIterator5 iterator(shifted_map, every); !iterator.isPastEnd(); ++iterator) {
+  for (grid_map::GridMapIteratorSparse iterator(shifted_map, every); !iterator.isPastEnd(); ++iterator) {
       	const Index index(*iterator);
 	float shifted = data(index(0), index(1));
 	if (shifted == shifted) {
 		points += 1;
 		grid_map::Position xy_position;
 		shifted_map.getPosition(index, xy_position);
-
-		tf::Transform transform = tf::Transform(tf::Quaternion(0, 0, sin(theta/180*M_PI/2), cos(theta/180*M_PI/2)), tf::Vector3(position(0), position(1), 0.0));
 		tf::Vector3 xy_vector = tf::Vector3(xy_position(0), xy_position(1), 0.0);
+
+		tf::Transform transform = tf::Transform(tf::Quaternion(0.0, 0.0, sin(theta/180*M_PI/2), cos(theta/180*M_PI/2)), tf::Vector3(position(0), position(1), 0.0));
 		tf::Vector3 map_vector = transform*(xy_vector);
 		grid_map::Position map_position;
 		map_position(0) = map_vector.getX();
@@ -61,11 +62,11 @@ float Correlation(GridMap shifted_map, GridMap reference_map, grid_map::Position
   }
 
   if (matches > points*req_overlap) {
-	cout << matches <<" matching points. ";
+	cout << matches <<" matching points of " << points <<" points. ";
 	return score/matches;
   }
   else {
-	cout << "Not enough matching points: " << matches <<" matches. ";
+	cout << "Not enough matching points: " << matches <<" matches of " << points <<" points. ";
 	return 1.0;
   }
 }
@@ -85,37 +86,49 @@ GridMap Shift(grid_map::Position position, float theta, GridMap shifted_map,   t
   GridMapRosConverter::toMessage(shifted_map, shifted_msg);
   shifted_msg.info.header.stamp = ros::Time::now();
   shifted_pub.publish(shifted_msg);
-
+  
   return shifted_map;
 }
 
 void ExhaustiveSearch(GridMap map, GridMap reference_map, tf::TransformBroadcaster broadcaster) {//should later return shift param
-  int angle = 10;
+  int angle = 45;
   int every = 5;
-  float correlation[reference_map.getSize()(0)][reference_map.getSize()(1)][360/angle];
+  grid_map::Position position;
+  position(0) = 6;
+  position(1) = 3;
+  Index startIndex;
+  reference_map.getIndex(position, startIndex);
+  Size size;
+  size(0) = (position(0) - (-1))/reference_map.getResolution();
+  size(1) = (position(1) - (-1))/reference_map.getResolution();
+  //float correlation[reference_map.getSize()(0)][reference_map.getSize()(1)][360/angle];
 
   GridMap correlation_map({"correlation","rotation"});
   correlation_map.setGeometry(reference_map.getLength(), reference_map.getResolution()*every,
                               reference_map.getPosition());
   correlation_map.setFrameId("map");
-
-  for (grid_map::GridMapIterator5 iterator(reference_map, every); !iterator.isPastEnd(); ++iterator) {
+  for (grid_map::SubmapIteratorSparse iterator(reference_map, startIndex, size, every); !iterator.isPastEnd(); ++iterator) {
       	const Index index(*iterator);
 	grid_map::Position xy_position;
 	reference_map.getPosition(index, xy_position);
-	for (int theta = 0; theta < 360; theta+=angle)
+	for (float theta = 0; theta < 360; theta+=angle)
 	{
-		correlation[index(0)][index(1)][theta/angle] = Correlation(Shift(xy_position, theta, map, broadcaster), reference_map, xy_position, theta);
-  		cout << "Correlation for " << xy_position.transpose() <<", " << theta <<" :" << correlation[index(0)][index(1)][theta/angle] << endl;
+		float corr = Correlation(Shift(xy_position, theta, map, broadcaster), reference_map, xy_position, theta);
+		//correlation[index(0)][index(1)][int(theta/angle)] = corr;
+  		cout << corr << " Correlation for " << xy_position.transpose() <<", " << theta ;
 		
 		if (correlation_map.isInside(xy_position)) {
 			Index correlation_index;
 			correlation_map.getIndex(xy_position, correlation_index);
-			if ((correlation_map.isValid(correlation_index, "correlation") == false || correlation[index(0)][index(1)][theta/angle] < correlation_map.at("correlation", correlation_index)) && correlation[index(0)][index(1)][theta/angle] != 1) {
-				correlation_map.at("correlation", correlation_index) = correlation[index(0)][index(1)][theta/angle]*10;
+			bool valid = correlation_map.isValid(correlation_index, "correlation");
+			if (((valid == false) || (corr*10 < correlation_map.at("correlation", correlation_index) )) && corr != 1) {
+				correlation_map.at("correlation", correlation_index) = corr*10;
 				correlation_map.at("rotation", correlation_index) = theta;
+				cout << " correlation set" << endl;
 			}
+			else {cout << " worse" << endl;}
 		}
+		else { cout << " outside" << endl;}
 	}
 	grid_map_msgs::GridMap correlation_msg;
   	GridMapRosConverter::toMessage(correlation_map, correlation_msg);
