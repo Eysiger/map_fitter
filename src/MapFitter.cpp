@@ -28,8 +28,7 @@ float CorrelationSAD(GridMap shifted_map, GridMap reference_map, grid_map::Posit
   int every = 5;		// VAR sparsity of match
   float req_overlap = 0.75;	// VAR required matches of all used template points
 
-  float correlation = 0;	// initialization
-  float score = 0;
+  float score = 0;		// initialization
   int points = 0;
   int matches = 0;
 
@@ -57,13 +56,116 @@ float CorrelationSAD(GridMap shifted_map, GridMap reference_map, grid_map::Posit
 			if (reference == reference) {   // check if point is defined, if nan f!= f 
 				matches += 1;		// increase number of matched points
 				float xy_score = abs(shifted - reference);
-				score += xy_score;	// sum up absolute differneces 
+				score += xy_score;	// sum up absolute differences 
 			}
 		}
 	}
   }
   // check if required overlap is fulfilled
   if (matches > points*req_overlap) { return score/matches; }
+  else { return 1.0; }
+}
+
+float CorrelationSSD(GridMap shifted_map, GridMap reference_map, grid_map::Position position, float theta) {	// Sum of Squared Differences divided by matching points
+  int every = 5;		// VAR sparsity of match
+  float req_overlap = 0.75;	// VAR required matches of all used template points
+
+  float score = 0;		// initialization
+  int points = 0;
+  int matches = 0;
+
+  // iterate sparsely through template points
+  grid_map::Matrix& data = shifted_map["elevation"];
+  for (grid_map::GridMapIteratorSparse iterator(shifted_map, every); !iterator.isPastEnd(); ++iterator) {
+      	const Index index(*iterator);
+	float shifted = data(index(0), index(1));
+	if (shifted == shifted) { 	// check if point is defined, if nan f!= f
+		points += 1;	  	// increase number of valid points
+		grid_map::Position xy_position;
+		shifted_map.getPosition(index, xy_position);	// get coordinates
+		tf::Vector3 xy_vector = tf::Vector3(xy_position(0), xy_position(1), 0.0);
+
+		// transform coordinates from /map_rotated to /map
+		tf::Transform transform = tf::Transform(tf::Quaternion(0.0, 0.0, sin(theta/180*M_PI/2), cos(theta/180*M_PI/2)), tf::Vector3(position(0), position(1), 0.0));
+		tf::Vector3 map_vector = transform*(xy_vector);	// apply transformation
+		grid_map::Position map_position;
+		map_position(0) = map_vector.getX();
+		map_position(1) = map_vector.getY();
+		
+		// check if point is within reference_map
+        	if (reference_map.isInside(map_position)) {
+			float reference = reference_map.atPosition("elevation", map_position);
+			if (reference == reference) {   // check if point is defined, if nan f!= f 
+				matches += 1;		// increase number of matched points
+				float xy_score = (shifted - reference)*(shifted - reference);
+				score += xy_score;	// sum up squared differences 
+			}
+		}
+	}
+  }
+  // check if required overlap is fulfilled
+  if (matches > points*req_overlap) { return score/matches; }
+  else { return 1.0; }
+}
+
+float CorrelationNCC(GridMap shifted_map, GridMap reference_map, grid_map::Position position, float theta) {	// Normalized Cross Correlation
+  int every = 5;		// VAR sparsity of match
+  float req_overlap = 0.75;	// VAR required matches of all used template points
+
+  float correlation = 0;	// initialization
+  float shifted_mean = 0;
+  float reference_mean = 0;
+  vector<float> xy_shifted;
+  vector<float> xy_reference;
+  float shifted_normal = 0;
+  float reference_normal = 0;
+  int points = 0;
+  int matches = 0;
+
+  grid_map::Matrix& data = shifted_map["elevation"];
+  // iterate sparsely through template points
+  for (grid_map::GridMapIteratorSparse iterator(shifted_map, every); !iterator.isPastEnd(); ++iterator) {
+      	const Index index(*iterator);
+	float shifted = data(index(0), index(1));
+	if (shifted == shifted) { 	// check if point is defined, if nan f!= f
+		points += 1;		// increase number of valid points
+		grid_map::Position xy_position;
+		shifted_map.getPosition(index, xy_position);	// get coordinates
+		tf::Vector3 xy_vector = tf::Vector3(xy_position(0), xy_position(1), 0.0);
+
+		// transform coordinates from /map_rotated to /map
+		tf::Transform transform = tf::Transform(tf::Quaternion(0.0, 0.0, sin(theta/180*M_PI/2), cos(theta/180*M_PI/2)), tf::Vector3(position(0), position(1), 0.0));
+		tf::Vector3 map_vector = transform*(xy_vector);	// apply transformation
+		grid_map::Position map_position;
+		map_position(0) = map_vector.getX();
+		map_position(1) = map_vector.getY();
+		
+		// check if point is within reference_map
+        	if (reference_map.isInside(map_position)) {
+			float reference = reference_map.atPosition("elevation", map_position);
+			if (reference == reference) {   // check if point is defined, if nan f!= f 
+				matches += 1;		// increase number of matched points
+				shifted_mean += shifted;
+				reference_mean += reference;
+				xy_shifted.push_back(shifted);
+				xy_reference.push_back(reference);
+			}
+		}
+	}
+  }
+  shifted_mean = shifted_mean/matches;
+  reference_mean = reference_mean/matches;
+  for (int i = 0; i < matches; i++) {
+	float shifted_corr = (xy_shifted[i]-shifted_mean);
+	float reference_corr = (xy_reference[i]-reference_mean);
+	correlation += shifted_corr*reference_corr;
+	shifted_normal += shifted_corr*shifted_corr;
+	reference_normal += reference_corr*reference_corr;
+  }
+
+  correlation = correlation/sqrt(shifted_normal*reference_normal);
+  // check if required overlap is fulfilled
+  if (matches > points*req_overlap) { return 1 - correlation; }
   else { return 1.0; }
 }
 
@@ -112,11 +214,13 @@ void ExhaustiveSearch(GridMap map, GridMap reference_map, tf::TransformBroadcast
   // iterate sparsely through search area
   for (grid_map::SubmapIteratorSparse iterator(reference_map, startIndex, size, every); !iterator.isPastEnd(); ++iterator) {
       	const Index index(*iterator);
-	grid_map::Position xy_position;
+	grid_map::Position xy_position;			// TODO check if isInside necessary
 	reference_map.getPosition(index, xy_position);		// get coordinates
 	for (float theta = 0; theta < 360; theta+=angle)	// iterate over rotation
 	{
-		float corr = CorrelationSAD(Shift(xy_position, theta, map, broadcaster), reference_map, xy_position, theta);		// get correlation of shifted_map
+		//float corr = CorrelationSAD(Shift(xy_position, theta, map, broadcaster), reference_map, xy_position, theta);		// get correlation of shifted_map
+		//float corr = CorrelationSSD(Shift(xy_position, theta, map, broadcaster), reference_map, xy_position, theta);		// get correlation of shifted_map
+		float corr = CorrelationNCC(Shift(xy_position, theta, map, broadcaster), reference_map, xy_position, theta);	// get correlation of shifted_map
 		//correlation[index(0)][index(1)][int(theta/angle)] = corr;
 		
 		if (correlation_map.isInside(xy_position)) {
