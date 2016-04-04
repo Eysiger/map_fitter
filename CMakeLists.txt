@@ -58,16 +58,15 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 # include_directories(${PCL_INCLUDE_DIRS})
 
 # Define an execuable target called hello_world_node 
-add_executable(map_fitter src/MapFitter.cpp)
-#  			    src/tfBroadcaster.cpp)
-# add_executable(tf_listener  src/tfListener.cpp)
+add_executable(${PROJECT_NAME} src/map_fitter_node.cpp
+            src/MapFitter.cpp)
 
 # Link the hello_world_node target against the libraries used by roscpp
-target_link_libraries(map_fitter ${catkin_LIBRARIES})
-target_link_libraries(map_fitter ${catkin_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
+
 # target_link_libraries(map_fitter ${PCL_LIBRARIES})
 # target_link_libraries(tf_listener ${catkin_LIBRARIES})
 
-add_dependencies(map_fitter map_fitter_gencpp)
+add_dependencies(${PROJECT_NAME} map_fitter_gencpp)
 # add_dependencies(tf_listener tf_listener_gencpp)
 
