@@ -17,10 +17,12 @@
 #include <tf/transform_broadcaster.h>
 #include <grid_map_core/GridMap.hpp>
 #include <grid_map_core/iterators/GridMapIteratorSparse.hpp>
-#include <grid_map_core/iterators/SubmapIteratorSparse.hpp>
+#include <grid_map_core/iterators/PolygonIterator.hpp>
+//#include <grid_map_core/iterators/SubmapIteratorSparse.hpp>
 #include <grid_map_ros/GridMapRosConverter.hpp>
 #include <grid_map_msgs/GridMap.h>
 #include <Eigen/Core>
+#include <geometry_msgs/PointStamped.h>
 
 namespace map_fitter {
 
@@ -46,9 +48,25 @@ public:
 
     void exhaustiveSearch();
 
-    void shift(grid_map::Position position, int theta);
+    float findZ(float x, float y, int theta);
 
-    float correlationNCC(grid_map::Position position, int theta);
+    bool findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float theta);
+
+    float mutualInformation();
+
+    float weightedMutualInformation();   
+
+    float errorSAD();
+
+    float weightedErrorSAD();
+
+    float errorSSD();
+
+    float weightedErrorSSD();
+
+    float correlationNCC();
+
+    float weightedCorrelationNCC();
 
 private:
     /*!
@@ -116,7 +134,18 @@ private:
     float requiredOverlap_;
 
 
+    float corrThreshold_;
+
+    float SSDThreshold_;
+
+    float SADThreshold_;
+
+    float MIThreshold_;
+
+
     tf::TransformBroadcaster broadcaster_;
+
+    //cv::Mat weightedHist_;
 
 
     //! Grid map publisher.
@@ -125,6 +154,31 @@ private:
     //! Grid map publisher.
     ros::Publisher correlationPublisher_;
 
+    ros::Publisher corrPointPublisher_;
+    ros::Publisher SSDPointPublisher_;
+    ros::Publisher SADPointPublisher_;
+    ros::Publisher MIPointPublisher_;
+    ros::Publisher correctPointPublisher_;
+
+
+    float cumulativeErrorCorr_;
+    float cumulativeErrorSSD_;
+    float cumulativeErrorSAD_;
+    float cumulativeErrorMI_;
+    int correctMatchesCorr_;
+    int correctMatchesSSD_;
+    int correctMatchesSAD_;
+    int correctMatchesMI_;
+
+    float shifted_mean_;
+    float reference_mean_;
+    int matches_;
+    std::vector<float> xy_shifted_;
+    std::vector<float> xy_reference_;
+    std::vector<float> xy_shifted_var_;
+    std::vector<float> xy_reference_var_;
+
+    float templateRotation_;
 
 };
 
