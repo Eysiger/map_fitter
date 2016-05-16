@@ -62,15 +62,16 @@ bool MapFitter::readParameters()
   correctMatchesSAD_ = 0;
   correctMatchesMI_ = 0;
 
-  /*weightedHist_ = cv::Mat::zeros(256, 256, cv::DataType<float>::type);
-  for (int i=0; i < 256; i++)
+  const int numberOfBins = 256;
+  weightedHist_.resize(numberOfBins, std::vector<float>(numberOfBins));
+  for (int i=0; i < numberOfBins; i++)
   {
-    for (int j=i; j < 256; j++)
+    for (int j=i; j < numberOfBins; j++)
     {
-      weightedHist_.at<float>(i,j) = float( ((j-i)+1) )/12;
-      weightedHist_.at<float>(j,i) = weightedHist_.at<float>(i,j);
+      weightedHist_[i][j] = float( ((j-i)+1) )/12;
+      weightedHist_[j][i] = float( ((j-i)+1) )/12;
     }
-  }*/
+  }
 }
 
 void MapFitter::updateSubscriptionCallback(const ros::TimerEvent&)
@@ -89,7 +90,7 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
   grid_map::GridMapRosConverter::fromMessage(message, map_);
 
   grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
-//grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_elevation_map_merged.bag", referenceMapTopic_, referenceMap_);
+  //grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_elevation_map_merged.bag", referenceMapTopic_, referenceMap_);
 
   exhaustiveSearch();
 }
@@ -126,16 +127,20 @@ void MapFitter::exhaustiveSearch()
 
   grid_map::Position correct_position = map_.getPosition();
   grid_map::Position position = referenceMap_.getPosition();
-  grid_map::Size size = referenceMap_.getSize();
-  grid_map::Index start_index = referenceMap_.getStartIndex();
+  grid_map::Size size = map_.getSize();
+  grid_map::Index start_index = map_.getStartIndex();
+  grid_map::Index reference_start_index = referenceMap_.getStartIndex();
+
+  map_min_ = map_.get("elevation").minCoeffOfFinites();
+  map_max_ = map_.get("elevation").maxCoeffOfFinites();
+  reference_min_ = referenceMap_.get("elevation").minCoeffOfFinites();
+  reference_max_ = referenceMap_.get("elevation").maxCoeffOfFinites();
+
   //float correlation[referenceMapImage_.rows][referenceMapImage_.cols][int(360/angleIncrement_)];
 
-  //ros::Time time = ros::Time::now();
-  ros::Duration duration;
-  duration.sec = 0;
-  duration.nsec = 0;
+  ros::Time time = ros::Time::now();
   duration1_.sec = 0;
-  duration1_.nsec = 0:
+  duration1_.nsec = 0;
   duration2_.sec = 0;
   duration2_.nsec = 0;
 
@@ -152,15 +157,13 @@ void MapFitter::exhaustiveSearch()
     // iterate sparsely through search area
     for (grid_map::GridMapIteratorSparse iterator(referenceMap_, searchIncrement_); !iterator.isPastEnd(); ++iterator) {
       grid_map::Index index(*iterator);
-      index = grid_map::getIndexFromBufferIndex(index, size, start_index);
+      index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
       float errSAD = 10;
       float errSSD = 10;
       float corrNCC = -1;
       float mutInfo = -10;
 
-      ros::Time time = ros::Time::now();
       bool success = findMatches(data, variance_data, reference_data, index, theta);
-      duration += ros::Time::now() - time;
 
       if (success) 
       {
@@ -172,7 +175,7 @@ void MapFitter::exhaustiveSearch()
         //errSAD = weightedErrorSAD();
         //errSSD = weightedErrorSSD();
         //corrNCC = weightedCorrelationNCC();
-        //mutInfo = weightedMutualInformation();
+        mutInfo = weightedMutualInformation();
         /*for (int i = 0; i < matches_; i++)
         {
           std::cout << xy_reference_[i] << std::endl;
@@ -380,7 +383,7 @@ void MapFitter::exhaustiveSearch()
   correctPointPublisher_.publish(correctPoint);
 
 
-  //ros::Duration duration = ros::Time::now() - time;
+  ros::Duration duration = ros::Time::now() - time;
   std::cout << "Best correlation " << bestCorr << " at " << bestXCorr << ", " << bestYCorr << " and theta " << bestThetaCorr << " and z: " << z << std::endl;
   std::cout << "Best SSD " << bestSSD << " at " << bestXSSD << ", " << bestYSSD << " and theta " << bestThetaSSD << std::endl;
   std::cout << "Best SAD " << bestSAD << " at " << bestXSAD << ", " << bestYSAD << " and theta " << bestThetaSAD << std::endl;
@@ -435,6 +438,7 @@ float MapFitter::findZ(float x, float y, int theta)
 
 bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float theta)
 {
+  ros::Time time1 = ros::Time::now();
   // initialize
   int points = 0;
   matches_ = 0;
@@ -455,27 +459,36 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
   {
     for (int j = 0; j<= size(1)-correlationIncrement_; j += correlationIncrement_)
     {
-      grid_map::Index index = start_index + grid_map::Index(i,j);
-      grid_map::mapIndexWithinRange(index, size);
-      ros::Time time = ros::Time::now();
-      float mapHeight = data(index(0), index(1));
-      duration1_ += ros::Time::now() - time;
+      //grid_map::Index index = start_index + grid_map::Index(i,j);
+      //grid_map::mapIndexWithinRange(index, size);
+      int index_x = (start_index(0)+i)%size(0);
+      int index_y = (start_index(1)+j)%size(1);
+
+      //float mapHeight = data(index(0), index(1));
+      float mapHeight = data(index_x, index_y);
+      
       if (mapHeight == mapHeight)
       {
         points += 1;
         grid_map::Index reference_buffer_index = reference_size - reference_start_index + reference_index;
-        grid_map::mapIndexWithinRange(reference_buffer_index, reference_size);
+        /*grid_map::mapIndexWithinRange(reference_buffer_index, reference_size);
         grid_map::Index shifted_index;
         shifted_index(0) = reference_buffer_index(0) - cos(theta/180*M_PI)*(float(size(0))/2-i)+sin(theta/180*M_PI)*(float(size(1))/2-j);
         shifted_index(1) = reference_buffer_index(1) - sin(theta/180*M_PI)*(float(size(0))/2-i)-cos(theta/180*M_PI)*(float(size(1))/2-j);
-
-        if (grid_map::checkIfIndexWithinRange(shifted_index, reference_size))
+        */
+        int shifted_index_x = reference_buffer_index(0)%reference_size(0) - cos(theta/180*M_PI)*(float(size(0))/2-i)+sin(theta/180*M_PI)*(float(size(1))/2-j);
+        int shifted_index_y = reference_buffer_index(1)%reference_size(1) - sin(theta/180*M_PI)*(float(size(0))/2-i)-cos(theta/180*M_PI)*(float(size(1))/2-j);
+        //if (grid_map::checkIfIndexWithinRange(shifted_index, reference_size))
+        if (shifted_index_x >= 0 && shifted_index_x < reference_size(0) && shifted_index_y >= 0 && shifted_index_y < reference_size(1))
         {
-          shifted_index = shifted_index + reference_start_index;
-          grid_map::mapIndexWithinRange(shifted_index, reference_size);
-          time = ros::Time::now();
-          float referenceHeight = reference_data(shifted_index(0), shifted_index(1));
-          duration2_ += ros::Time::now() - time;
+          //shifted_index = shifted_index + reference_start_index;
+          //grid_map::mapIndexWithinRange(shifted_index, reference_size);
+          shifted_index_x = (shifted_index_x + reference_start_index(0))%reference_size(0);
+          shifted_index_y = (shifted_index_y + reference_start_index(1))%reference_size(1);
+
+          //float referenceHeight = reference_data(shifted_index(0), shifted_index(1));
+          float referenceHeight = reference_data(shifted_index_x, shifted_index_y);
+          
           //std::cout << referenceHeight << " " << shifted_index_x <<", " << shifted_index_y << std::endl;
           if (referenceHeight == referenceHeight)
           {
@@ -484,13 +497,15 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
             reference_mean_ += referenceHeight;
             xy_shifted_.push_back(mapHeight);
             xy_reference_.push_back(referenceHeight);
-            float mapVariance = variance_data(index(0), index(1));
+            //float mapVariance = variance_data(index(0), index(1));
+            float mapVariance = variance_data(index_x, index_y);
             xy_shifted_var_.push_back(1 / mapVariance);
           }
         }
       }
     }
   }
+  duration1_ += ros::Time::now() - time1;
 
   // check if required overlap is fulfilled
   if (matches_ > points*requiredOverlap_) 
@@ -502,214 +517,113 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
   else { return false; }
 }
 
-/*float MapFitter::correlationNCC(grid_map::Position position, int theta)
-{
-  float correlation = 0;  // initialization
-  float shifted_mean = 0;
-  float reference_mean = 0;
-  std::vector<float> xy_shifted;
-  std::vector<float> xy_reference;
-  float shifted_normal = 0;
-  float reference_normal = 0;
-  int points = 0;
-  int matches = 0;
-
-  
-  grid_map::Matrix& data = map_["elevation"];
-
-  // iterate sparsely through template points
-  for (grid_map::GridMapIteratorSparse iterator(map_, correlationIncrement_); !iterator.isPastEnd(); ++iterator) {
-    const grid_map::Index index(*iterator);
-
-  
-    float shifted = data(index(0), index(1));
-  
-    
-    if (shifted == shifted) {   // check if point is defined, if nan f!= f
-      points += 1;    // increase number of valid points
-      grid_map::Position xy_position;
-      map_.getPosition(index, xy_position);  // get coordinates 30% time
-      tf::Vector3 xy_vector = tf::Vector3(xy_position(0), xy_position(1), 0.0);
-
-      // transform coordinates from /map_rotated to /map
-      tf::Transform transform = tf::Transform(tf::Quaternion(0.0, 0.0, sin(theta/180*M_PI/2), cos(theta/180*M_PI/2)), tf::Vector3(position(0), position(1), 0.0));
-      tf::Vector3 map_vector = transform*(xy_vector); // apply transformation
-      grid_map::Position map_position;
-      map_position(0) = map_vector.getX();
-      map_position(1) = map_vector.getY();
-
-  ros::Time correlation_time = ros::Time::now();
-      // check if point is within reference_map
-      if (referenceMap_.isInside(map_position)) { // 15% time
-  correlationDur_ += ros::Time::now() - correlation_time;
-        float reference = referenceMap_.atPosition("elevation", map_position); // 45% time
-
-        if (reference == reference) {   // check if point is defined, if nan f!= f 
-          matches += 1;   // increase number of matched points
-          shifted_mean += shifted;
-          reference_mean += reference;
-      correlation_time = ros::Time::now();
-          xy_shifted.push_back(shifted);
-          xy_reference.push_back(reference);
-      correlationDur2_ += ros::Time::now() - correlation_time;
-        }
-      }
-    }
-  }
-  
-  
-  // check if required overlap is fulfilled
-  if (matches > points*requiredOverlap_) 
-  { 
-    // calculate Normalized Cross Correlation (NCC)
-    shifted_mean = shifted_mean/matches;
-    reference_mean = reference_mean/matches;
-    for (int i = 0; i < matches; i++) {
-      float shifted_corr = (xy_shifted[i]-shifted_mean);
-      float reference_corr = (xy_reference[i]-reference_mean);
-      correlation += shifted_corr*reference_corr;
-      shifted_normal += shifted_corr*shifted_corr;
-      reference_normal += reference_corr*reference_corr;
-    }
-    correlation = correlation/sqrt(shifted_normal*reference_normal);
-    return 1 - correlation; 
-  }
-  else { return 1.0; }
-}*/
-
 float MapFitter::mutualInformation()
 {
-  /*cv::Mat hist( 256, 1, cv::DataType<float>::type, 0.0); 
-  cv::Mat referenceHist( 256, 1, cv::DataType<float>::type, 0.0);
-  cv::Mat jointHist( 256, 256, cv::DataType<float>::type, 0.0);
+  const int numberOfBins = 256;
 
-  for (int k=0; k < matches_; k++)
+  float minHeight = map_min_ - shifted_mean_;
+  if ((reference_min_ - reference_mean_) < minHeight)
   {
-      int i1 = xy_shifted_[k]/65536*127 - (shifted_mean_+1)/65536*127 + 127;
-      int i2 = xy_reference_[k]/65536*127 - (reference_mean_+1)/65536*127 + 127;
-      hist.at<float>(i1, 0) += 1;
-      referenceHist.at<float>(i2, 0) += 1;
-      jointHist.at<float>(i1, i2) += 1;
+    minHeight = reference_min_ - reference_mean_;
   }
-  hist = hist/matches_;
-  referenceHist = referenceHist/matches_;
-  jointHist = jointHist/matches_;
+  float maxHeight = map_max_ - shifted_mean_;
+  if ((reference_max_ - reference_mean_) > maxHeight)
+  {
+    maxHeight = reference_max_ - reference_mean_;
+  }
+  float binWidth = (maxHeight - minHeight)/(numberOfBins - 1);
+  float hist[numberOfBins] = {0.0};
+  float referenceHist[numberOfBins] = {0.0};
+  float jointHist[numberOfBins][numberOfBins] = {0.0};
+
+  for (int i = 0; i < matches_; i++)
+  {
+    float i1 = xy_shifted_[i] - shifted_mean_;
+    float i2 = xy_reference_[i] - reference_mean_;
+    //std::cout << int((i1-minHeight) / binWidth) << " " << int((i2-minHeight) / binWidth) << std::endl;
+    hist[int((i1-minHeight) / binWidth)] += 1.0/matches_;
+    referenceHist[int((i2-minHeight) / binWidth)] += 1.0/matches_;
+    jointHist[int((i1-minHeight) / binWidth)][int((i2-minHeight) / binWidth)] += 1.0/matches_;
+  }
   
-  cv::Mat logP;
-  cv::log(hist,logP);
-  cv::Mat referenceLogP;
-  cv::log(referenceHist,referenceLogP);
-  cv::Mat jointLogP;
-  cv::log(jointHist,jointLogP);
+  float entropy = 0;
+  float referenceEntropy = 0;
+  float jointEntropy = 0;
 
-  float entropy = -1*cv::sum(hist.mul(logP)).val[0];
-  float referenceEntropy = -1*cv::sum(referenceHist.mul(referenceLogP)).val[0];
-  float jointEntropy = -1*cv::sum(jointHist.mul(jointLogP)).val[0];*/
-
-  /*cv::Mat divLogP;
-  cv::gemm(hist, referenceHist, 1, cv::Mat(), 0, divLogP, cv::GEMM_2_T);
-  cv::divide(jointHist, divLogP, divLogP);
-  cv::log(divLogP, divLogP);
-  float mutualDiv = cv::sum(weightedHist.mul(divLogP)).val[0];*/
-
-  //std::cout << " Mutual information: " << entropy+referenceEntropy-jointEntropy << " by division: " << mutualDiv <<std::endl;
-  //std::cout << count << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
-
-  /*jointHist = jointHist * 255;
-
-  cv::Mat histImage( 256, 256, cv::DataType<float>::type, 0.0);
-  cv::Mat histImage2( 256, 256, cv::DataType<float>::type, 0.0);
-
-  cv::normalize(hist, hist, 0, histImage.rows-1, cv::NORM_MINMAX, -1, cv::Mat() );
-  cv::normalize(referenceHist, referenceHist, 0, histImage2.rows-1, cv::NORM_MINMAX, -1, cv::Mat() );
-
-  for( int i = 1; i < 256; i++ )
+  for (int i = 0; i < numberOfBins; i++)
   {
-    cv::line( histImage, cv::Point( (i-1), 255 - cvRound(hist.at<float>(i-1)) ) ,
-                     cv::Point(i, 255 - cvRound(hist.at<float>(i)) ),
-                     cv::Scalar( 255, 0, 0), 1, 8, 0  );
-    cv::line( histImage2, cv::Point( (i-1), 255 - cvRound(referenceHist.at<float>(i-1)) ) ,
-                     cv::Point( i, 255 - cvRound(referenceHist.at<float>(i)) ),
-                     cv::Scalar( 255, 0, 0), 1, 8, 0  );
-  }
-  std::vector<cv::Mat> channels; 
-  channels.push_back(histImage);
-  channels.push_back(histImage2);
-  channels.push_back(jointHist);
-  cv::merge(channels, histImage);
-  cv::namedWindow("calcHist", CV_WINDOW_AUTOSIZE );
-  cv::imshow("calcHist", histImage );
-  cv::waitKey(0);*/
+    if (hist[i]!=0.0) {entropy += fabs(hist[i])*log(fabs(hist[i]));}
+    if (referenceHist[i]!=0.0) {referenceEntropy += fabs(referenceHist[i])*log(fabs(referenceHist[i]));}
 
-  //return (entropy+referenceEntropy-jointEntropy); // jointEntropy or sqrt(entropy*referenceEntropy);
+    for (int j = 0; j < numberOfBins; j++)
+    {
+      if (jointHist[i][j]!=0.0) {jointEntropy += fabs(jointHist[i][j])*log(fabs(jointHist[i][j]));}
+    }
+  }
+
+  entropy = -1*entropy;;
+  referenceEntropy = -1*referenceEntropy;
+  jointEntropy = -1*jointEntropy;
+
+  //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
+
+  return (entropy+referenceEntropy-jointEntropy);
 }
 
 float MapFitter::weightedMutualInformation()
 {
-  /*cv::Mat hist( 256, 1, cv::DataType<float>::type, 0.0);
-  cv::Mat referenceHist( 256, 1, cv::DataType<float>::type, 0.0);
-  cv::Mat jointHist( 256, 256, cv::DataType<float>::type, 0.0);
+  ros::Time time2 = ros::Time::now();
+  const int numberOfBins = 256;
 
-  for (int k=0; k < matches_; k++)
+  float minHeight = map_min_ - shifted_mean_;
+  if ((reference_min_ - reference_mean_) < minHeight)
   {
-      int i1 = xy_shifted_[k]/65536*127 - (shifted_mean_+1)/65536*127 + 127;
-      int i2 = xy_reference_[k]/65536*127 - (reference_mean_+1)/65536*127 + 127;
-      hist.at<float>(i1, 0) += 1;
-      referenceHist.at<float>(i2, 0) += 1;
-      jointHist.at<float>(i1, i2) += 1;
+    minHeight = reference_min_ - reference_mean_;
   }
-  hist = hist/matches_;
-  referenceHist = referenceHist/matches_;
-  jointHist = jointHist/matches_;
+  float maxHeight = map_max_ - shifted_mean_;
+  if ((reference_max_ - reference_mean_) > maxHeight)
+  {
+    maxHeight = reference_max_ - reference_mean_;
+  }
+
+  duration2_ += ros::Time::now() - time2;
+
+  float binWidth = (maxHeight - minHeight)/(numberOfBins - 1);
+  float hist[numberOfBins] = {0.0};
+  float referenceHist[numberOfBins] = {0.0};
+  float jointHist[numberOfBins][numberOfBins] = {0.0};
+
+  for (int i = 0; i < matches_; i++)
+  {
+    float i1 = xy_shifted_[i] - shifted_mean_;
+    float i2 = xy_reference_[i] - reference_mean_;
+    //std::cout << int((i1-minHeight) / binWidth) << " " << int((i2-minHeight) / binWidth) << std::endl;
+    hist[int((i1-minHeight) / binWidth)] += 1.0/matches_;
+    referenceHist[int((i2-minHeight) / binWidth)] += 1.0/matches_;
+    jointHist[int((i1-minHeight) / binWidth)][int((i2-minHeight) / binWidth)] += 1.0/matches_;
+  }
   
-  cv::Mat logP;
-  cv::log(hist,logP);
-  float entropy = -1*cv::sum(hist.mul(logP)).val[0];
+  float entropy = 0;
+  float referenceEntropy = 0;
+  float jointEntropy = 0;
 
-  cv::log(referenceHist,logP);
-  float referenceEntropy = -1*cv::sum(referenceHist.mul(logP)).val[0];
+  for (int i = 0; i < numberOfBins; i++)
+  {
+    if (hist[i]!=0.0) {entropy += fabs(hist[i])*log(fabs(hist[i]));}
+    if (referenceHist[i]!=0.0) {referenceEntropy += fabs(referenceHist[i])*log(fabs(referenceHist[i]));}
 
-  cv::Mat jointLogP;
-  cv::log(jointHist,jointLogP);
+    for (int j = 0; j < numberOfBins; j++)
+    {
+      if (jointHist[i][j]!=0.0) {jointEntropy += weightedHist_[i][j]*fabs(jointHist[i][j])*log(fabs(jointHist[i][j]));}
+    }
+  }
 
-  //cv::Mat weightedHist;
-  //float norm = cv::norm(weightedHist, cv::NORM_L1);
-  //weightedHist = weightedHist/norm;
-  //std::cout << weightedHist <<std::endl;
-  jointHist = weightedHist_.mul(jointHist);
-
-  float jointEntropy = -1*cv::sum(jointHist.mul(jointLogP)).val[0];*/
+  entropy = -1*entropy;;
+  referenceEntropy = -1*referenceEntropy;
+  jointEntropy = -1*jointEntropy;
 
   //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
-
-  /*cv::divide(jointHist, weightedHist_, jointHist);
-  jointHist = jointHist * 255;
-
-  cv::Mat histImage( 256, 256, cv::DataType<float>::type, 0.0);
-  cv::Mat histImage2( 256, 256, cv::DataType<float>::type, 0.0);
-
-  cv::normalize(hist, hist, 0, histImage.rows-1, cv::NORM_MINMAX, -1, cv::Mat() );
-  cv::normalize(referenceHist, referenceHist, 0, histImage2.rows-1, cv::NORM_MINMAX, -1, cv::Mat() );
-
-  for( int i = 1; i < 256; i++ )
-  {
-    cv::line( histImage, cv::Point( (i-1), 255 - cvRound(hist.at<float>(i-1)) ) ,
-                     cv::Point(i, 255 - cvRound(hist.at<float>(i)) ),
-                     cv::Scalar( 255, 0, 0), 1, 8, 0  );
-    cv::line( histImage2, cv::Point( (i-1), 255 - cvRound(referenceHist.at<float>(i-1)) ) ,
-                     cv::Point( i, 255 - cvRound(referenceHist.at<float>(i)) ),
-                     cv::Scalar( 255, 0, 0), 1, 8, 0  );
-  }
-  std::vector<cv::Mat> channels; 
-  channels.push_back(histImage);
-  channels.push_back(histImage2);
-  channels.push_back(jointHist);
-  cv::merge(channels, histImage);
-  cv::namedWindow("calcHist", CV_WINDOW_AUTOSIZE );
-  cv::imshow("calcHist", histImage );
-  cv::waitKey(0);*/
-
-  //return (entropy+referenceEntropy-jointEntropy); //-cv::sum(jointHist).val[0]+2; // jointEntropy or sqrt(entropy*referenceEntropy);
+  return (entropy+referenceEntropy-jointEntropy);
 }
 
 float MapFitter::errorSAD()

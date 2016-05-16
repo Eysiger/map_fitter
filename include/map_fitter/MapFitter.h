@@ -143,7 +143,12 @@ private:
 
     tf::TransformBroadcaster broadcaster_;
 
-    //cv::Mat weightedHist_;
+    std::vector< std::vector<float> > weightedHist_;
+
+    float map_min_;
+    float map_max_;
+    float reference_min_;
+    float reference_max_;
 
 
     //! Grid map publisher.
