@@ -130,7 +130,14 @@ void MapFitter::exhaustiveSearch()
   grid_map::Index start_index = referenceMap_.getStartIndex();
   //float correlation[referenceMapImage_.rows][referenceMapImage_.cols][int(360/angleIncrement_)];
 
-  ros::Time time = ros::Time::now();
+  //ros::Time time = ros::Time::now();
+  ros::Duration duration;
+  duration.sec = 0;
+  duration.nsec = 0;
+  duration1_.sec = 0;
+  duration1_.nsec = 0:
+  duration2_.sec = 0;
+  duration2_.nsec = 0;
 
   grid_map::Matrix& reference_data = referenceMap_["elevation"];
   grid_map::Matrix& data = map_["elevation"];
@@ -151,7 +158,9 @@ void MapFitter::exhaustiveSearch()
       float corrNCC = -1;
       float mutInfo = -10;
 
+      ros::Time time = ros::Time::now();
       bool success = findMatches(data, variance_data, reference_data, index, theta);
+      duration += ros::Time::now() - time;
 
       if (success) 
       {
@@ -371,13 +380,13 @@ void MapFitter::exhaustiveSearch()
   correctPointPublisher_.publish(correctPoint);
 
 
-  ros::Duration duration = ros::Time::now() - time;
+  //ros::Duration duration = ros::Time::now() - time;
   std::cout << "Best correlation " << bestCorr << " at " << bestXCorr << ", " << bestYCorr << " and theta " << bestThetaCorr << " and z: " << z << std::endl;
   std::cout << "Best SSD " << bestSSD << " at " << bestXSSD << ", " << bestYSSD << " and theta " << bestThetaSSD << std::endl;
   std::cout << "Best SAD " << bestSAD << " at " << bestXSAD << ", " << bestYSAD << " and theta " << bestThetaSAD << std::endl;
   std::cout << "Best MI " << bestMI << " at " << bestXMI << ", " << bestYMI << " and theta " << bestThetaMI << std::endl;
   std::cout << "Correct position " << correct_position.transpose() << " and theta " << (360-int(templateRotation_))%360 << std::endl;
-  std::cout << "Time used: " << duration.toSec() << " Sekunden" << std::endl;
+  std::cout << "Time used: " << duration.toSec() << " Sekunden" << " 1: " << duration1_.toSec() << " 2: " << duration2_.toSec() << std::endl;
   std::cout << "Cumulative error NCC: " << cumulativeErrorCorr_ << " matches: " << correctMatchesCorr_ << " SSD: " << cumulativeErrorSSD_ << " matches: " << correctMatchesSSD_ << " SAD: " << cumulativeErrorSAD_ << " matches: " << correctMatchesSAD_ << " MI: " << cumulativeErrorMI_ << " matches: " << correctMatchesMI_ << std::endl;
   ROS_INFO("done");
   isActive_ = false;
@@ -440,38 +449,43 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
   grid_map::Size size = map_.getSize();
   grid_map::Index start_index = map_.getStartIndex();
   grid_map::Size reference_size = referenceMap_.getSize();
+  grid_map::Index reference_start_index = referenceMap_.getStartIndex();
 
   for (int i = 0; i <= size(0)-correlationIncrement_; i += correlationIncrement_)
   {
     for (int j = 0; j<= size(1)-correlationIncrement_; j += correlationIncrement_)
     {
-      grid_map::Index index = grid_map::getIndexFromBufferIndex(grid_map::Index(i,j), size, start_index);
+      grid_map::Index index = start_index + grid_map::Index(i,j);
+      grid_map::mapIndexWithinRange(index, size);
+      ros::Time time = ros::Time::now();
       float mapHeight = data(index(0), index(1));
+      duration1_ += ros::Time::now() - time;
       if (mapHeight == mapHeight)
       {
         points += 1;
-        
-        int shifted_index_x = reference_index(0) - cos(theta/180*M_PI)*(float(size(0))/2-i)+sin(theta/180*M_PI)*(float(size(1))/2-j);
-        int shifted_index_y = reference_index(1) - sin(theta/180*M_PI)*(float(size(0))/2-i)-cos(theta/180*M_PI)*(float(size(1))/2-j);
-        
+        grid_map::Index reference_buffer_index = reference_size - reference_start_index + reference_index;
+        grid_map::mapIndexWithinRange(reference_buffer_index, reference_size);
+        grid_map::Index shifted_index;
+        shifted_index(0) = reference_buffer_index(0) - cos(theta/180*M_PI)*(float(size(0))/2-i)+sin(theta/180*M_PI)*(float(size(1))/2-j);
+        shifted_index(1) = reference_buffer_index(1) - sin(theta/180*M_PI)*(float(size(0))/2-i)-cos(theta/180*M_PI)*(float(size(1))/2-j);
 
-        if (shifted_index_x >= 0 && shifted_index_y >= 0)
+        if (grid_map::checkIfIndexWithinRange(shifted_index, reference_size))
         {
-          if (grid_map::checkIfIndexWithinRange(grid_map::Index(shifted_index_x, shifted_index_y), reference_size))
+          shifted_index = shifted_index + reference_start_index;
+          grid_map::mapIndexWithinRange(shifted_index, reference_size);
+          time = ros::Time::now();
+          float referenceHeight = reference_data(shifted_index(0), shifted_index(1));
+          duration2_ += ros::Time::now() - time;
+          //std::cout << referenceHeight << " " << shifted_index_x <<", " << shifted_index_y << std::endl;
+          if (referenceHeight == referenceHeight)
           {
-            float referenceHeight = reference_data(shifted_index_x, shifted_index_y);
-
-            //std::cout << referenceHeight << " " << shifted_index_x <<", " << shifted_index_y << std::endl;
-            if (referenceHeight == referenceHeight)
-            {
-              matches_ += 1;
-              shifted_mean_ += mapHeight;
-              reference_mean_ += referenceHeight;
-              xy_shifted_.push_back(mapHeight);
-              xy_reference_.push_back(referenceHeight);
-              float mapVariance = variance_data(index(0), index(1));
-              xy_shifted_var_.push_back(1 / mapVariance);
-            }
+            matches_ += 1;
+            shifted_mean_ += mapHeight;
+            reference_mean_ += referenceHeight;
+            xy_shifted_.push_back(mapHeight);
+            xy_reference_.push_back(referenceHeight);
+            float mapVariance = variance_data(index(0), index(1));
+            xy_shifted_var_.push_back(1 / mapVariance);
           }
         }
       }
@@ -803,7 +817,7 @@ void MapFitter::tfBroadcast(const ros::TimerEvent&) {
   broadcaster_.sendTransform(
       tf::StampedTransform(
         tf::Transform(tf::Quaternion(0, 0, 0, 1), tf::Vector3(0.0, 0.0, 0.0)), 
-          ros::Time::now(),"/world", "/map"));
+          ros::Time::now(),"/map", "/grid_map"));
 }
 
 } /* namespace */

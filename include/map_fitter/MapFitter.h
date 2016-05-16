@@ -17,8 +17,6 @@
 #include <tf/transform_broadcaster.h>
 #include <grid_map_core/GridMap.hpp>
 #include <grid_map_core/iterators/GridMapIteratorSparse.hpp>
-#include <grid_map_core/iterators/PolygonIterator.hpp>
-//#include <grid_map_core/iterators/SubmapIteratorSparse.hpp>
 #include <grid_map_ros/GridMapRosConverter.hpp>
 #include <grid_map_msgs/GridMap.h>
 #include <Eigen/Core>
@@ -179,6 +177,9 @@ private:
     std::vector<float> xy_reference_var_;
 
     float templateRotation_;
+
+    ros::Duration duration1_;
+    ros::Duration duration2_;
 
 };
 
