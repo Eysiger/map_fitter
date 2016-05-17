@@ -49,7 +49,7 @@ public:
 
     float findZ(float x, float y, int theta);
 
-    bool findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float theta);
+    bool findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float sin_theta, float cos_theta);
 
     float mutualInformation();
 

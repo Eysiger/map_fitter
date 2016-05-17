@@ -160,6 +160,8 @@ void MapFitter::exhaustiveSearch()
     best_SAD[int(theta/angleIncrement_)] = 10;
     best_MI[int(theta/angleIncrement_)] = -10;
 
+    float sin_theta = sin(theta/180*M_PI);
+    float cos_theta = cos(theta/180*M_PI);
     // iterate sparsely through search area
     for (grid_map::SubmapIteratorSparse iterator(referenceMap_, submap_start_index, submap_size, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
       //for (grid_map::GridMapIteratorSparse iterator(referenceMap_, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
@@ -171,7 +173,7 @@ void MapFitter::exhaustiveSearch()
       float corrNCC = -1;
       float mutInfo = -10;
 
-      bool success = findMatches(data, variance_data, reference_data, index, theta);
+      bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
 
       if (success) 
       {
@@ -444,9 +446,8 @@ float MapFitter::findZ(float x, float y, int theta)
   return reference_mean - shifted_mean;
 }
 
-bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float theta)
+bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float sin_theta, float cos_theta)
 {
-  ros::Time time1 = ros::Time::now();
   // initialize
   int points = 0;
   matches_ = 0;
@@ -458,29 +459,44 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
   xy_shifted_var_.clear();
   //xy_reference_var_.clear();
 
-  grid_map::Size size = map_.getSize();
-  grid_map::Index start_index = map_.getStartIndex();
-  grid_map::Size reference_size = referenceMap_.getSize();
-  grid_map::Index reference_start_index = referenceMap_.getStartIndex();
+  Eigen::Array2i size = map_.getSize();
+  int size_x = size(0);
+  int size_y = size(1);
+  Eigen::Array2i start_index = map_.getStartIndex();
+  int start_index_x = start_index(0);
+  int start_index_y = start_index(1);
+  Eigen::Array2i reference_size = referenceMap_.getSize();
+  int reference_size_x = reference_size(0);
+  int reference_size_y = reference_size(1);
+  Eigen::Array2i reference_start_index = referenceMap_.getStartIndex();
+  int reference_start_index_x = reference_start_index(0);
+  int reference_start_index_y = reference_start_index(1);
+  int reference_index_x = reference_index(0);
+  int reference_index_y = reference_index(1);
 
-  for (int i = 0; i <= size(0)-correlationIncrement_; i += correlationIncrement_)
+  for (int i = 0; i <= size_x-correlationIncrement_; i += correlationIncrement_)
   {
-    for (int j = 0; j<= size(1)-correlationIncrement_; j += correlationIncrement_)
+    for (int j = 0; j<= size_y-correlationIncrement_; j += correlationIncrement_)
     {
-      int index_x = (start_index(0)+i)%size(0);
-      int index_y = (start_index(1)+j)%size(1);
-      float mapHeight = data(index_x, index_y);
+      int index_x = (start_index_x + i) % size_x;
+      int index_y = (start_index_y + j) % size_y;
 
+      float mapHeight = data(index_x, index_y);
+        ros::Time time1 = ros::Time::now();
       if (mapHeight == mapHeight)
       {
         points += 1;
-        grid_map::Index reference_buffer_index = reference_size - reference_start_index + reference_index;
-        int shifted_index_x = reference_buffer_index(0)%reference_size(0) - cos(theta/180*M_PI)*(float(size(0))/2-i)+sin(theta/180*M_PI)*(float(size(1))/2-j);
-        int shifted_index_y = reference_buffer_index(1)%reference_size(1) - sin(theta/180*M_PI)*(float(size(0))/2-i)-cos(theta/180*M_PI)*(float(size(1))/2-j);
-        if (shifted_index_x >= 0 && shifted_index_x < reference_size(0) && shifted_index_y >= 0 && shifted_index_y < reference_size(1))
+        int reference_buffer_index_x = reference_size_x - reference_start_index_x + reference_index_x;
+        int reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
+
+              ros::Time time2 = ros::Time::now();
+        int shifted_index_x = reference_buffer_index_x % reference_size_x - cos_theta*(float(size_x)/2-i) + sin_theta*(float(size_y)/2-j);
+        int shifted_index_y = reference_buffer_index_y % reference_size_y - sin_theta*(float(size_x)/2-i) - cos_theta*(float(size_y)/2-j);
+              duration2_ += ros::Time::now() - time2;
+        if (shifted_index_x >= 0 && shifted_index_x < reference_size_x && shifted_index_y >= 0 && shifted_index_y < reference_size_y )
         {
-          shifted_index_x = (shifted_index_x + reference_start_index(0))%reference_size(0);
-          shifted_index_y = (shifted_index_y + reference_start_index(1))%reference_size(1);
+          shifted_index_x = (shifted_index_x + reference_start_index_x) % reference_size_x;
+          shifted_index_y = (shifted_index_y + reference_start_index_y) % reference_size_y;
           float referenceHeight = reference_data(shifted_index_x, shifted_index_y);
           //std::cout << referenceHeight << " " << shifted_index_x <<", " << shifted_index_y << std::endl;
           if (referenceHeight == referenceHeight)
@@ -495,9 +511,10 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
           }
         }
       }
+       duration1_ += ros::Time::now() - time1;
     }
   }
-  duration1_ += ros::Time::now() - time1;
+
 
   // check if required overlap is fulfilled
   if (matches_ > points*requiredOverlap_) 
@@ -564,7 +581,6 @@ float MapFitter::mutualInformation()
 
 float MapFitter::weightedMutualInformation()
 {
-  ros::Time time2 = ros::Time::now();
   const int numberOfBins = 256;
 
   float minHeight = map_min_ - shifted_mean_;
@@ -577,8 +593,6 @@ float MapFitter::weightedMutualInformation()
   {
     maxHeight = reference_max_ - reference_mean_;
   }
-
-  duration2_ += ros::Time::now() - time2;
 
   float binWidth = (maxHeight - minHeight)/(numberOfBins - 1);
   float hist[numberOfBins] = {0.0};
