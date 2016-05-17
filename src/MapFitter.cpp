@@ -41,7 +41,7 @@ bool MapFitter::readParameters()
   nodeHandle_.param("shifted_map_topic", shiftedMapTopic_, std::string("/elevation_mapping_long_range/shifted_map"));
   nodeHandle_.param("correlation_map_topic", correlationMapTopic_, std::string("/correlation_best_rotation/correlation_map"));
 
-  nodeHandle_.param("angle_increment", angleIncrement_, 360);
+  nodeHandle_.param("angle_increment", angleIncrement_, 10);
   nodeHandle_.param("position_increment_search", searchIncrement_, 5);
   nodeHandle_.param("position_increment_correlation", correlationIncrement_, 5);
   nodeHandle_.param("required_overlap", requiredOverlap_, float(0.75));
@@ -279,7 +279,7 @@ void MapFitter::exhaustiveSearch()
   {
     if (best_corr[i] > bestCorr && best_corr[i] >= corrThreshold_) 
     {
-      std::cout << int(acceptedThetas(corr_row[i], corr_col[i])) << " " << int(360/angleIncrement_) << std::endl;
+      //std::cout << int(acceptedThetas(corr_row[i], corr_col[i])) << " " << int(360/angleIncrement_) << std::endl;
       if (int(acceptedThetas(corr_row[i], corr_col[i])) == int(360/angleIncrement_))
       {
         bestCorr = best_corr[i];
@@ -459,36 +459,21 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
   {
     for (int j = 0; j<= size(1)-correlationIncrement_; j += correlationIncrement_)
     {
-      //grid_map::Index index = start_index + grid_map::Index(i,j);
-      //grid_map::mapIndexWithinRange(index, size);
       int index_x = (start_index(0)+i)%size(0);
       int index_y = (start_index(1)+j)%size(1);
-
-      //float mapHeight = data(index(0), index(1));
       float mapHeight = data(index_x, index_y);
-      
+
       if (mapHeight == mapHeight)
       {
         points += 1;
         grid_map::Index reference_buffer_index = reference_size - reference_start_index + reference_index;
-        /*grid_map::mapIndexWithinRange(reference_buffer_index, reference_size);
-        grid_map::Index shifted_index;
-        shifted_index(0) = reference_buffer_index(0) - cos(theta/180*M_PI)*(float(size(0))/2-i)+sin(theta/180*M_PI)*(float(size(1))/2-j);
-        shifted_index(1) = reference_buffer_index(1) - sin(theta/180*M_PI)*(float(size(0))/2-i)-cos(theta/180*M_PI)*(float(size(1))/2-j);
-        */
         int shifted_index_x = reference_buffer_index(0)%reference_size(0) - cos(theta/180*M_PI)*(float(size(0))/2-i)+sin(theta/180*M_PI)*(float(size(1))/2-j);
         int shifted_index_y = reference_buffer_index(1)%reference_size(1) - sin(theta/180*M_PI)*(float(size(0))/2-i)-cos(theta/180*M_PI)*(float(size(1))/2-j);
-        //if (grid_map::checkIfIndexWithinRange(shifted_index, reference_size))
         if (shifted_index_x >= 0 && shifted_index_x < reference_size(0) && shifted_index_y >= 0 && shifted_index_y < reference_size(1))
         {
-          //shifted_index = shifted_index + reference_start_index;
-          //grid_map::mapIndexWithinRange(shifted_index, reference_size);
           shifted_index_x = (shifted_index_x + reference_start_index(0))%reference_size(0);
           shifted_index_y = (shifted_index_y + reference_start_index(1))%reference_size(1);
-
-          //float referenceHeight = reference_data(shifted_index(0), shifted_index(1));
           float referenceHeight = reference_data(shifted_index_x, shifted_index_y);
-          
           //std::cout << referenceHeight << " " << shifted_index_x <<", " << shifted_index_y << std::endl;
           if (referenceHeight == referenceHeight)
           {
@@ -497,7 +482,6 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
             reference_mean_ += referenceHeight;
             xy_shifted_.push_back(mapHeight);
             xy_reference_.push_back(referenceHeight);
-            //float mapVariance = variance_data(index(0), index(1));
             float mapVariance = variance_data(index_x, index_y);
             xy_shifted_var_.push_back(1 / mapVariance);
           }
