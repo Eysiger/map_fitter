@@ -147,6 +147,12 @@ void MapFitter::exhaustiveSearch()
   grid_map::Matrix& reference_data = referenceMap_["elevation"];
   grid_map::Matrix& data = map_["elevation"];
   grid_map::Matrix& variance_data = map_["variance"];
+
+  grid_map::Index submap_start_index;
+  grid_map::Size submap_size;
+  referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
+  //std::cout << reference_start_index.transpose() << " reference_size: "<< reference_size.transpose() << "submap" << submap_start_index.transpose() << " size " << submap_size.transpose() << std::endl;
+
   for (float theta = 0; theta < 360; theta+=angleIncrement_)
   {
     best_corr[int(theta/angleIncrement_)] = -1;
@@ -155,9 +161,11 @@ void MapFitter::exhaustiveSearch()
     best_MI[int(theta/angleIncrement_)] = -10;
 
     // iterate sparsely through search area
-    for (grid_map::GridMapIteratorSparse iterator(referenceMap_, searchIncrement_); !iterator.isPastEnd(); ++iterator) {
+    for (grid_map::SubmapIteratorSparse iterator(referenceMap_, submap_start_index, submap_size, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
+      //for (grid_map::GridMapIteratorSparse iterator(referenceMap_, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
+    {
       grid_map::Index index(*iterator);
-      index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
+      //index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
       float errSAD = 10;
       float errSSD = 10;
       float corrNCC = -1;
