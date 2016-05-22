@@ -41,10 +41,10 @@ bool MapFitter::readParameters()
   nodeHandle_.param("shifted_map_topic", shiftedMapTopic_, std::string("/elevation_mapping_long_range/shifted_map"));
   nodeHandle_.param("correlation_map_topic", correlationMapTopic_, std::string("/correlation_best_rotation/correlation_map"));
 
-  nodeHandle_.param("angle_increment", angleIncrement_, 10);
+  nodeHandle_.param("angle_increment", angleIncrement_, 5);
   nodeHandle_.param("position_increment_search", searchIncrement_, 5);
   nodeHandle_.param("position_increment_correlation", correlationIncrement_, 5);
-  nodeHandle_.param("required_overlap", requiredOverlap_, float(0.75));
+  nodeHandle_.param("required_overlap", requiredOverlap_, float(0.70));
   nodeHandle_.param("correlation_threshold", corrThreshold_, float(0)); //0.65 weighted, 0.75 unweighted
   nodeHandle_.param("SSD_threshold", SSDThreshold_, float(10));
   nodeHandle_.param("SAD_threshold", SADThreshold_, float(10));
@@ -89,8 +89,8 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
             message.info.header.stamp.toSec());
   grid_map::GridMapRosConverter::fromMessage(message, map_);
 
-  grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
-  //grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_elevation_map_merged.bag", referenceMapTopic_, referenceMap_);
+  grid_map::GridMapRosConverter::loadFromBag("/home/roman/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
+  //grid_map::GridMapRosConverter::loadFromBag("/home/roman/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_);
 
   exhaustiveSearch();
 }
@@ -153,12 +153,14 @@ void MapFitter::exhaustiveSearch()
   referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
   //std::cout << reference_start_index.transpose() << " reference_size: "<< reference_size.transpose() << "submap" << submap_start_index.transpose() << " size " << submap_size.transpose() << std::endl;
 
-  for (float theta = 0; theta < 360; theta+=angleIncrement_)
+  templateRotation_ = rand() %360;
+
+  for (float theta = templateRotation_; theta < 360 + templateRotation_; theta+=angleIncrement_)
   {
-    best_corr[int(theta/angleIncrement_)] = -1;
-    best_SSD[int(theta/angleIncrement_)] = 10;
-    best_SAD[int(theta/angleIncrement_)] = 10;
-    best_MI[int(theta/angleIncrement_)] = -10;
+    best_corr[int((theta-templateRotation_)/angleIncrement_)] = -1;
+    best_SSD[int((theta-templateRotation_)/angleIncrement_)] = 10;
+    best_SAD[int((theta-templateRotation_)/angleIncrement_)] = 10;
+    best_MI[int((theta-templateRotation_)/angleIncrement_)] = -10;
 
     float sin_theta = sin(theta/180*M_PI);
     float cos_theta = cos(theta/180*M_PI);
@@ -235,29 +237,29 @@ void MapFitter::exhaustiveSearch()
         }
                   
         // save best correlation for each theta
-        if (corrNCC > best_corr[int(theta/angleIncrement_)])
+        if (corrNCC > best_corr[int((theta-templateRotation_)/angleIncrement_)])
         {
-          best_corr[int(theta/angleIncrement_)] = corrNCC;
-          corr_row[int(theta/angleIncrement_)] = index(0);
-          corr_col[int(theta/angleIncrement_)] = index(1);
+          best_corr[int((theta-templateRotation_)/angleIncrement_)] = corrNCC;
+          corr_row[int((theta-templateRotation_)/angleIncrement_)] = index(0);
+          corr_col[int((theta-templateRotation_)/angleIncrement_)] = index(1);
         }
-        if (errSSD < best_SSD[int(theta/angleIncrement_)])
+        if (errSSD < best_SSD[int((theta-templateRotation_)/angleIncrement_)])
         {
-          best_SSD[int(theta/angleIncrement_)] = errSSD;
-          SSD_row[int(theta/angleIncrement_)] = index(0);
-          SSD_col[int(theta/angleIncrement_)] = index(1);
+          best_SSD[int((theta-templateRotation_)/angleIncrement_)] = errSSD;
+          SSD_row[int((theta-templateRotation_)/angleIncrement_)] = index(0);
+          SSD_col[int((theta-templateRotation_)/angleIncrement_)] = index(1);
         }
-        if (errSAD < best_SAD[int(theta/angleIncrement_)])
+        if (errSAD < best_SAD[int((theta-templateRotation_)/angleIncrement_)])
         {
-          best_SAD[int(theta/angleIncrement_)] = errSAD;
-          SAD_row[int(theta/angleIncrement_)] = index(0);
-          SAD_col[int(theta/angleIncrement_)] = index(1);
+          best_SAD[int((theta-templateRotation_)/angleIncrement_)] = errSAD;
+          SAD_row[int((theta-templateRotation_)/angleIncrement_)] = index(0);
+          SAD_col[int((theta-templateRotation_)/angleIncrement_)] = index(1);
         }
-        if (mutInfo > best_MI[int(theta/angleIncrement_)])
+        if (mutInfo > best_MI[int((theta-templateRotation_)/angleIncrement_)])
         {
-          best_MI[int(theta/angleIncrement_)] = mutInfo;
-          MI_row[int(theta/angleIncrement_)] = index(0);
-          MI_col[int(theta/angleIncrement_)] = index(1);
+          best_MI[int((theta-templateRotation_)/angleIncrement_)] = mutInfo;
+          MI_row[int((theta-templateRotation_)/angleIncrement_)] = index(0);
+          MI_col[int((theta-templateRotation_)/angleIncrement_)] = index(1);
         }
       }
     }
@@ -388,7 +390,7 @@ void MapFitter::exhaustiveSearch()
   geometry_msgs::PointStamped correctPoint;
   correctPoint.point.x = correct_position(0);
   correctPoint.point.y = correct_position(1);
-  correctPoint.point.z = 0;
+  correctPoint.point.z = templateRotation_;
   correctPoint.header.stamp = pubTime;
   correctPointPublisher_.publish(correctPoint);
 
@@ -490,7 +492,7 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
         int reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
 
               ros::Time time2 = ros::Time::now();
-        int shifted_index_x = reference_buffer_index_x % reference_size_x - cos_theta*(float(size_x)/2-i) + sin_theta*(float(size_y)/2-j);
+        int shifted_index_x = reference_buffer_index_x % reference_size_x - round(cos_theta*(float(size_x)/2-i) - sin_theta*(float(size_y)/2-j));
         int shifted_index_y = reference_buffer_index_y % reference_size_y - sin_theta*(float(size_x)/2-i) - cos_theta*(float(size_y)/2-j);
               duration2_ += ros::Time::now() - time2;
         if (shifted_index_x >= 0 && shifted_index_x < reference_size_x && shifted_index_y >= 0 && shifted_index_y < reference_size_y )
@@ -669,7 +671,7 @@ float MapFitter::errorSSD()
   {
     float shifted = (xy_shifted_[i]-shifted_mean_)/std::numeric_limits<unsigned short>::max();
     float reference = (xy_reference_[i]-reference_mean_)/std::numeric_limits<unsigned short>::max();
-    error += (shifted-reference)*(shifted-reference); //sqrt(fabs(shifted-reference)) instead of (shifted-reference)*(shifted-reference), since values are in between 0 and 1
+    error += sqrt(fabs(shifted-reference)); //(shifted-reference)*(shifted-reference); //sqrt(fabs(shifted-reference)) instead of (shifted-reference)*(shifted-reference), since values are in between 0 and 1
   }
   // divide error by number of matches
   //std::cout << error/matches_ <<std::endl;
@@ -684,7 +686,7 @@ float MapFitter::weightedErrorSSD()
   {
     float shifted = (xy_shifted_[i]-shifted_mean_)/std::numeric_limits<unsigned short>::max();
     float reference = (xy_reference_[i]-reference_mean_)/std::numeric_limits<unsigned short>::max();
-    error += (shifted-reference)*(shifted-reference) * xy_shifted_var_[i]*xy_shifted_var_[i];// * xy_reference_var_[i]; //sqrt(fabs(shifted-reference)) instead of (shifted-reference)*(shifted-reference), since values are in between 0 and 1
+    error += sqrt(fabs(shifted-reference)) * xy_shifted_var_[i]*xy_shifted_var_[i];// * xy_reference_var_[i]; //sqrt(fabs(shifted-reference)) instead of (shifted-reference)*(shifted-reference), since values are in between 0 and 1
     normalization += xy_shifted_var_[i]*xy_shifted_var_[i];// * (xy_reference_var_[i]/std::numeric_limits<unsigned short>::max());
   }
   // divide error by number of matches
