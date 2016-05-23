@@ -153,14 +153,14 @@ void MapFitter::exhaustiveSearch()
   referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
   //std::cout << reference_start_index.transpose() << " reference_size: "<< reference_size.transpose() << "submap" << submap_start_index.transpose() << " size " << submap_size.transpose() << std::endl;
 
-  templateRotation_ = rand() %360;
+  templateRotation_ = static_cast <float> (rand() / static_cast <float> (RAND_MAX/360)); //rand() %360;
 
   for (float theta = templateRotation_; theta < 360 + templateRotation_; theta+=angleIncrement_)
   {
-    best_corr[int((theta-templateRotation_)/angleIncrement_)] = -1;
-    best_SSD[int((theta-templateRotation_)/angleIncrement_)] = 10;
-    best_SAD[int((theta-templateRotation_)/angleIncrement_)] = 10;
-    best_MI[int((theta-templateRotation_)/angleIncrement_)] = -10;
+    best_corr[int(round((theta-templateRotation_)/angleIncrement_))] = -1;
+    best_SSD[int(round((theta-templateRotation_)/angleIncrement_))] = 10;
+    best_SAD[int(round((theta-templateRotation_)/angleIncrement_))] = 10;
+    best_MI[int(round((theta-templateRotation_)/angleIncrement_))] = -10;
 
     float sin_theta = sin(theta/180*M_PI);
     float cos_theta = cos(theta/180*M_PI);
@@ -237,29 +237,29 @@ void MapFitter::exhaustiveSearch()
         }
                   
         // save best correlation for each theta
-        if (corrNCC > best_corr[int((theta-templateRotation_)/angleIncrement_)])
+        if (corrNCC > best_corr[int(round((theta-templateRotation_)/angleIncrement_))])
         {
-          best_corr[int((theta-templateRotation_)/angleIncrement_)] = corrNCC;
-          corr_row[int((theta-templateRotation_)/angleIncrement_)] = index(0);
-          corr_col[int((theta-templateRotation_)/angleIncrement_)] = index(1);
+          best_corr[int(round((theta-templateRotation_)/angleIncrement_))] = corrNCC;
+          corr_row[int(round((theta-templateRotation_)/angleIncrement_))] = index(0);
+          corr_col[int(round((theta-templateRotation_)/angleIncrement_))] = index(1);
         }
-        if (errSSD < best_SSD[int((theta-templateRotation_)/angleIncrement_)])
+        if (errSSD < best_SSD[int(round((theta-templateRotation_)/angleIncrement_))])
         {
-          best_SSD[int((theta-templateRotation_)/angleIncrement_)] = errSSD;
-          SSD_row[int((theta-templateRotation_)/angleIncrement_)] = index(0);
-          SSD_col[int((theta-templateRotation_)/angleIncrement_)] = index(1);
+          best_SSD[int(round((theta-templateRotation_)/angleIncrement_))] = errSSD;
+          SSD_row[int(round((theta-templateRotation_)/angleIncrement_))] = index(0);
+          SSD_col[int(round((theta-templateRotation_)/angleIncrement_))] = index(1);
         }
-        if (errSAD < best_SAD[int((theta-templateRotation_)/angleIncrement_)])
+        if (errSAD < best_SAD[int(round((theta-templateRotation_)/angleIncrement_))])
         {
-          best_SAD[int((theta-templateRotation_)/angleIncrement_)] = errSAD;
-          SAD_row[int((theta-templateRotation_)/angleIncrement_)] = index(0);
-          SAD_col[int((theta-templateRotation_)/angleIncrement_)] = index(1);
+          best_SAD[int(round((theta-templateRotation_)/angleIncrement_))] = errSAD;
+          SAD_row[int(round((theta-templateRotation_)/angleIncrement_))] = index(0);
+          SAD_col[int(round((theta-templateRotation_)/angleIncrement_))] = index(1);
         }
-        if (mutInfo > best_MI[int((theta-templateRotation_)/angleIncrement_)])
+        if (mutInfo > best_MI[int(round((theta-templateRotation_)/angleIncrement_))])
         {
-          best_MI[int((theta-templateRotation_)/angleIncrement_)] = mutInfo;
-          MI_row[int((theta-templateRotation_)/angleIncrement_)] = index(0);
-          MI_col[int((theta-templateRotation_)/angleIncrement_)] = index(1);
+          best_MI[int(round((theta-templateRotation_)/angleIncrement_))] = mutInfo;
+          MI_row[int(round((theta-templateRotation_)/angleIncrement_))] = index(0);
+          MI_col[int(round((theta-templateRotation_)/angleIncrement_))] = index(1);
         }
       }
     }
@@ -390,7 +390,7 @@ void MapFitter::exhaustiveSearch()
   geometry_msgs::PointStamped correctPoint;
   correctPoint.point.x = correct_position(0);
   correctPoint.point.y = correct_position(1);
-  correctPoint.point.z = templateRotation_;
+  correctPoint.point.z = (360.0-templateRotation_);
   correctPoint.header.stamp = pubTime;
   correctPointPublisher_.publish(correctPoint);
 
@@ -400,7 +400,7 @@ void MapFitter::exhaustiveSearch()
   std::cout << "Best SSD " << bestSSD << " at " << bestXSSD << ", " << bestYSSD << " and theta " << bestThetaSSD << std::endl;
   std::cout << "Best SAD " << bestSAD << " at " << bestXSAD << ", " << bestYSAD << " and theta " << bestThetaSAD << std::endl;
   std::cout << "Best MI " << bestMI << " at " << bestXMI << ", " << bestYMI << " and theta " << bestThetaMI << std::endl;
-  std::cout << "Correct position " << correct_position.transpose() << " and theta " << (360-int(templateRotation_))%360 << std::endl;
+  std::cout << "Correct position " << correct_position.transpose() << " and theta " << (360.0-templateRotation_) << std::endl;
   std::cout << "Time used: " << duration.toSec() << " Sekunden" << " 1: " << duration1_.toSec() << " 2: " << duration2_.toSec() << std::endl;
   std::cout << "Cumulative error NCC: " << cumulativeErrorCorr_ << " matches: " << correctMatchesCorr_ << " SSD: " << cumulativeErrorSSD_ << " matches: " << correctMatchesSSD_ << " SAD: " << cumulativeErrorSAD_ << " matches: " << correctMatchesSAD_ << " MI: " << cumulativeErrorMI_ << " matches: " << correctMatchesMI_ << std::endl;
   ROS_INFO("done");
