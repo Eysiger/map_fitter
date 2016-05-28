@@ -88,7 +88,7 @@ void MapFitter::exhaustiveSearch()
 {
   // initialize correlationMap
   grid_map::GridMap correlationMap({"correlation","rotationNCC","SSD","rotationSSD","SAD","rotationSAD", "MI", "rotationMI"});
-  correlationMap.setGeometry(referenceMap_.getLength(), referenceMap_.getResolution()*searchIncrement_,
+  correlationMap.setGeometry(referenceMap_.getLength(), referenceMap_.getResolution(),
                               referenceMap_.getPosition()); //TODO only use submap
   correlationMap.setFrameId("grid_map");
 
@@ -151,6 +151,8 @@ void MapFitter::exhaustiveSearch()
         numberOfParticles_ += 1;
       }
     }
+    std::cout <<"Number of particles: " << numberOfParticles_ << std::endl;
+    isFirst_ = false;
   }
 
   for (int i = 0; i < numberOfParticles_; i++)
@@ -327,9 +329,65 @@ void MapFitter::exhaustiveSearch()
   correctPoint.header.stamp = pubTime;
   correctPointPublisher_.publish(correctPoint);
 
-  //update particles
-  //TODO
+  //update & resample particles
+  //threshold for acceptance?
+  std::vector<float> beta;
+  beta.clear();
+  for (int i = 0; i < numberOfParticles_; i++)
+  {
+    if (NCC[i] > 0.0) { beta.push_back(NCC[i]); }
+    else { beta.push_back(0.0); }
+  }
+  float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
+  std::cout << sum << std::endl;
+  std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
+  std::partial_sum(beta.begin(), beta.end(), beta.begin());
+  std::cout << beta[numberOfParticles_-1] << std::endl;
 
+  std::vector< std::vector<int> > newParticles;
+  newParticles.clear();
+
+  std::default_random_engine generator;
+  std::normal_distribution<float> distribution(0.0,5.0);
+  std::cout << "normal dist initialized" << std::endl;
+  //int newNumberOfParticles = 0;
+  for (int i = 0; i < numberOfParticles_; i++)
+  {
+    float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta[numberOfParticles_-1]-beta[0]) + beta[0];
+    int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
+
+    int rowShift = round(distribution(generator));
+    if (particleRow_[ind] + rowShift >= rows && particleRow_[ind] + rowShift < 0)
+      { rowShift = -rowShift; }
+
+    int colShift = round(distribution(generator));
+    if (particleCol_[ind] + colShift >= cols && particleCol_[ind] + colShift < 0)
+         { colShift = -colShift; }
+
+    std::vector<int> particle;
+    particle.clear();
+    particle.push_back(particleRow_[ind] + rowShift);
+    particle.push_back(particleCol_[ind] + colShift);
+    particle.push_back(int(particleTheta_[ind] + round(distribution(generator))) % 360);
+    newParticles.push_back(particle);
+  }
+  std::sort(newParticles.begin(), newParticles.end());
+  auto last = std::unique(newParticles.begin(), newParticles.end());
+  newParticles.erase(last, newParticles.end());
+
+  numberOfParticles_ = newParticles.size();//newNumberOfParticles;
+  std::cout <<"New number of particles: " << numberOfParticles_ << std::endl;
+
+  particleRow_.clear();
+  particleCol_.clear();
+  particleTheta_.clear();
+
+  for (int i = 0; i < numberOfParticles_; i++)
+  {
+    particleRow_.push_back(newParticles[i][0]);
+    particleCol_.push_back(newParticles[i][1]);
+    particleTheta_.push_back(newParticles[i][2]);
+  }
 
   ros::Duration duration = ros::Time::now() - time;
   std::cout << "Best NCC " << bestNCC << " at " << bestXNCC << ", " << bestYNCC << " and theta " << bestThetaNCC << " and z: " << z << std::endl;
