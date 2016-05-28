@@ -111,6 +111,8 @@ private:
     //! If the grid map visualization is subscribed to the grid map.
     bool isActive_;
 
+    bool isFirst_;
+
     //! ROS subscriber to the grid map.
     ros::Subscriber mapSubscriber_;
 
@@ -143,8 +145,7 @@ private:
 
 
     tf::TransformBroadcaster broadcaster_;
-
-    std::vector< std::vector<float> > weightedHist_;
+    
 
     float map_min_;
     float map_max_;
@@ -184,9 +185,13 @@ private:
 
     float templateRotation_;
 
+    std::vector<int> particleRow_;
+    std::vector<int> particleCol_;
+    std::vector<int> particleTheta_;
+    int numberOfParticles_;
+
     ros::Duration duration1_;
     ros::Duration duration2_;
-
 };
 
 } /* namespace */

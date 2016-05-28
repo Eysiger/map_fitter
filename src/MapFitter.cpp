@@ -12,7 +12,7 @@
 namespace map_fitter {
 
 MapFitter::MapFitter(ros::NodeHandle& nodeHandle)
-    : nodeHandle_(nodeHandle), isActive_(false)
+    : nodeHandle_(nodeHandle), isActive_(false), isFirst_(true)
 {
   ROS_INFO("Map fitter node started, ready to match some grid maps.");
   readParameters();
@@ -44,7 +44,7 @@ bool MapFitter::readParameters()
   nodeHandle_.param("angle_increment", angleIncrement_, 5);
   nodeHandle_.param("position_increment_search", searchIncrement_, 5);
   nodeHandle_.param("position_increment_correlation", correlationIncrement_, 5);
-  nodeHandle_.param("required_overlap", requiredOverlap_, float(0.70));
+  nodeHandle_.param("required_overlap", requiredOverlap_, float(0.75));
   nodeHandle_.param("correlation_threshold", corrThreshold_, float(0)); //0.65 weighted, 0.75 unweighted
   nodeHandle_.param("SSD_threshold", SSDThreshold_, float(10));
   nodeHandle_.param("SAD_threshold", SADThreshold_, float(10));
@@ -61,17 +61,6 @@ bool MapFitter::readParameters()
   correctMatchesSSD_ = 0;
   correctMatchesSAD_ = 0;
   correctMatchesMI_ = 0;
-
-  const int numberOfBins = 256;
-  weightedHist_.resize(numberOfBins, std::vector<float>(numberOfBins));
-  for (int i=0; i < numberOfBins; i++)
-  {
-    for (int j=i; j < numberOfBins; j++)
-    {
-      weightedHist_[i][j] = float( ((j-i)+1) )/12;
-      weightedHist_[j][i] = float( ((j-i)+1) )/12;
-    }
-  }
 }
 
 void MapFitter::updateSubscriptionCallback(const ros::TimerEvent&)
@@ -89,8 +78,8 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
             message.info.header.stamp.toSec());
   grid_map::GridMapRosConverter::fromMessage(message, map_);
 
-  grid_map::GridMapRosConverter::loadFromBag("/home/roman/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
-  //grid_map::GridMapRosConverter::loadFromBag("/home/roman/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_);
+  grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
+  //grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_);
 
   exhaustiveSearch();
 }
@@ -107,23 +96,16 @@ void MapFitter::exhaustiveSearch()
   grid_map::Size reference_size = referenceMap_.getSize();
   int rows = reference_size(0);
   int cols = reference_size(1);
-  grid_map::Matrix acceptedThetas = grid_map::Matrix::Constant(reference_size(0), reference_size(1), 0);
+  //grid_map::Matrix acceptedThetas = grid_map::Matrix::Constant(reference_size(0), reference_size(1), 0);
 
-  float best_corr[int(360/angleIncrement_)];
-  int corr_row[int(360/angleIncrement_)];
-  int corr_col[int(360/angleIncrement_)];
-
-  float best_SSD[int(360/angleIncrement_)];
-  int SSD_row[int(360/angleIncrement_)];
-  int SSD_col[int(360/angleIncrement_)];
-
-  float best_SAD[int(360/angleIncrement_)];
-  int SAD_row[int(360/angleIncrement_)];
-  int SAD_col[int(360/angleIncrement_)];
-
-  float best_MI[int(360/angleIncrement_)];
-  int MI_row[int(360/angleIncrement_)];
-  int MI_col[int(360/angleIncrement_)];
+  std::vector<float> SAD;
+  std::vector<float> SSD;
+  std::vector<float> NCC;
+  std::vector<float> MI;
+  SAD.clear();
+  SSD.clear();
+  NCC.clear();
+  MI.clear();
 
   grid_map::Position correct_position = map_.getPosition();
   grid_map::Position position = referenceMap_.getPosition();
@@ -135,8 +117,6 @@ void MapFitter::exhaustiveSearch()
   map_max_ = map_.get("elevation").maxCoeffOfFinites();
   reference_min_ = referenceMap_.get("elevation").minCoeffOfFinites();
   reference_max_ = referenceMap_.get("elevation").maxCoeffOfFinites();
-
-  //float correlation[referenceMapImage_.rows][referenceMapImage_.cols][int(360/angleIncrement_)];
 
   ros::Time time = ros::Time::now();
   duration1_.sec = 0;
@@ -155,202 +135,155 @@ void MapFitter::exhaustiveSearch()
 
   templateRotation_ = static_cast <float> (rand() / static_cast <float> (RAND_MAX/360)); //rand() %360;
 
-  for (float theta = templateRotation_; theta < 360 + templateRotation_; theta+=angleIncrement_)
+  // initialize particles
+  if (isFirst_)
   {
-    best_corr[int(round((theta-templateRotation_)/angleIncrement_))] = -1;
-    best_SSD[int(round((theta-templateRotation_)/angleIncrement_))] = 10;
-    best_SAD[int(round((theta-templateRotation_)/angleIncrement_))] = 10;
-    best_MI[int(round((theta-templateRotation_)/angleIncrement_))] = -10;
-
-    float sin_theta = sin(theta/180*M_PI);
-    float cos_theta = cos(theta/180*M_PI);
-    // iterate sparsely through search area
-    for (grid_map::SubmapIteratorSparse iterator(referenceMap_, submap_start_index, submap_size, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
+    numberOfParticles_ = 0;
+    for (float theta = templateRotation_; theta < 360 + templateRotation_; theta+=angleIncrement_)
+    {
+      for (grid_map::SubmapIteratorSparse iterator(referenceMap_, submap_start_index, submap_size, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
       //for (grid_map::GridMapIteratorSparse iterator(referenceMap_, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
-    {
-      grid_map::Index index(*iterator);
-      //index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
-      float errSAD = 10;
-      float errSSD = 10;
-      float corrNCC = -1;
-      float mutInfo = -10;
-
-      bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
-
-      if (success) 
       {
-        errSAD = errorSAD();
-        errSSD = errorSSD();
-        corrNCC = correlationNCC();
-        //mutInfo = mutualInformation();
-
-        //errSAD = weightedErrorSAD();
-        //errSSD = weightedErrorSSD();
-        //corrNCC = weightedCorrelationNCC();
-        mutInfo = weightedMutualInformation();
-        /*for (int i = 0; i < matches_; i++)
-        {
-          std::cout << xy_reference_[i] << std::endl;
-        }*/
-
-
-        acceptedThetas(index(0), index(1)) += 1;
-
-        grid_map::Position xy_position;
-        referenceMap_.getPosition(index, xy_position);
-        if (correlationMap.isInside(xy_position))
-        {
-          grid_map::Index correlation_index;
-          correlationMap.getIndex(xy_position, correlation_index);
-
-          bool valid = correlationMap.isValid(correlation_index, "correlation");
-          // if no value so far or correlation smaller or correlation higher than for other thetas
-          if (((valid == false) || (corrNCC+1.5 > correlationMap.at("correlation", correlation_index) ))) 
-          {
-            correlationMap.at("correlation", correlation_index) = corrNCC+1.5;  //set correlation
-            correlationMap.at("rotationNCC", correlation_index) = theta;    //set theta
-          }
-
-          valid = correlationMap.isValid(correlation_index, "SSD");
-          // if no value so far or correlation smaller or correlation higher than for other thetas
-          if (((valid == false) || (errSSD*5 < correlationMap.at("SSD", correlation_index) ))) 
-          {
-            correlationMap.at("SSD", correlation_index) = errSSD*5;  //set correlation
-            correlationMap.at("rotationSSD", correlation_index) = theta;    //set theta
-          }
-
-          valid = correlationMap.isValid(correlation_index, "SAD");
-          // if no value so far or correlation smaller or correlation higher than for other thetas
-          if (((valid == false) || (errSSD*5 < correlationMap.at("SAD", correlation_index) ))) 
-          {
-            correlationMap.at("SAD", correlation_index) = errSAD*5;  //set correlation
-            correlationMap.at("rotationSAD", correlation_index) = theta;    //set theta
-          }
-
-          valid = correlationMap.isValid(correlation_index, "MI");
-          // if no value so far or correlation smaller or correlation higher than for other thetas
-          if (((valid == false) || (mutInfo > correlationMap.at("MI", correlation_index) ))) 
-          {
-            correlationMap.at("MI", correlation_index) = mutInfo;  //set correlation
-            correlationMap.at("rotationMI", correlation_index) = theta;    //set theta
-          }
-        }
-                  
-        // save best correlation for each theta
-        if (corrNCC > best_corr[int(round((theta-templateRotation_)/angleIncrement_))])
-        {
-          best_corr[int(round((theta-templateRotation_)/angleIncrement_))] = corrNCC;
-          corr_row[int(round((theta-templateRotation_)/angleIncrement_))] = index(0);
-          corr_col[int(round((theta-templateRotation_)/angleIncrement_))] = index(1);
-        }
-        if (errSSD < best_SSD[int(round((theta-templateRotation_)/angleIncrement_))])
-        {
-          best_SSD[int(round((theta-templateRotation_)/angleIncrement_))] = errSSD;
-          SSD_row[int(round((theta-templateRotation_)/angleIncrement_))] = index(0);
-          SSD_col[int(round((theta-templateRotation_)/angleIncrement_))] = index(1);
-        }
-        if (errSAD < best_SAD[int(round((theta-templateRotation_)/angleIncrement_))])
-        {
-          best_SAD[int(round((theta-templateRotation_)/angleIncrement_))] = errSAD;
-          SAD_row[int(round((theta-templateRotation_)/angleIncrement_))] = index(0);
-          SAD_col[int(round((theta-templateRotation_)/angleIncrement_))] = index(1);
-        }
-        if (mutInfo > best_MI[int(round((theta-templateRotation_)/angleIncrement_))])
-        {
-          best_MI[int(round((theta-templateRotation_)/angleIncrement_))] = mutInfo;
-          MI_row[int(round((theta-templateRotation_)/angleIncrement_))] = index(0);
-          MI_col[int(round((theta-templateRotation_)/angleIncrement_))] = index(1);
-        }
+        grid_map::Index index(*iterator);
+        particleRow_.push_back(index(0));
+        particleCol_.push_back(index(1));
+        particleTheta_.push_back(round(theta-templateRotation_));
+        numberOfParticles_ += 1;
       }
     }
-    // publish correlationMap for each theta
-    grid_map_msgs::GridMap correlation_msg;
-    grid_map::GridMapRosConverter::toMessage(correlationMap, correlation_msg);
-    correlationPublisher_.publish(correlation_msg);
   }
-  
-  //find highest correlation over all theta
-  float bestCorr = -1.0;
-  float bestSSD = 10;
-  float bestSAD = 10;
-  float bestMI = -10;
-  int bestThetaCorr;
-  int bestThetaSSD;
-  int bestThetaSAD;
-  int bestThetaMI;
-  float bestXCorr;
-  float bestYCorr;
-  float bestXSSD;
-  float bestYSSD;
-  float bestXSAD;
-  float bestYSAD;
-  float bestXMI;
-  float bestYMI;
 
-  for (int i = 0; i < int(360/angleIncrement_); i++)
+  for (int i = 0; i < numberOfParticles_; i++)
   {
-    if (best_corr[i] > bestCorr && best_corr[i] >= corrThreshold_) 
+    int row = particleRow_[i];
+    int col = particleCol_[i];
+    grid_map::Index index = grid_map::Index(row, col);
+    int theta = particleTheta_[i];
+
+    float sin_theta = sin((theta+templateRotation_)/180*M_PI);
+    float cos_theta = cos((theta+templateRotation_)/180*M_PI);
+    bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
+
+    if (success) 
     {
-      //std::cout << int(acceptedThetas(corr_row[i], corr_col[i])) << " " << int(360/angleIncrement_) << std::endl;
-      if (int(acceptedThetas(corr_row[i], corr_col[i])) == int(360/angleIncrement_))
+      float errSAD = errorSAD();
+      float errSSD = errorSSD();
+      float corrNCC = correlationNCC();
+      //float mutInfo = mutualInformation();
+
+      //float errSAD = weightedErrorSAD();
+      //float errSSD = weightedErrorSSD();
+      //float corrNCC = weightedCorrelationNCC();
+      float mutInfo = weightedMutualInformation();
+
+      SAD.push_back(errSAD);
+      SSD.push_back(errSSD);
+      NCC.push_back(corrNCC);
+      MI.push_back(mutInfo);
+
+      //acceptedThetas(index(0), index(1)) += 1;
+
+      grid_map::Position xy_position;
+      referenceMap_.getPosition(index, xy_position);
+      if (correlationMap.isInside(xy_position))
       {
-        bestCorr = best_corr[i];
-        bestThetaCorr = i*angleIncrement_;
-        grid_map::Position best_pos;
-        referenceMap_.getPosition(grid_map::Index(corr_row[i], corr_col[i]), best_pos);
-        bestXCorr = best_pos(0);
-        bestYCorr = best_pos(1);
+        grid_map::Index correlation_index;
+        correlationMap.getIndex(xy_position, correlation_index);
+
+        bool valid = correlationMap.isValid(correlation_index, "correlation");
+        // if no value so far or correlation smaller or correlation higher than for other thetas
+        if (((valid == false) || (corrNCC+1 > correlationMap.at("correlation", correlation_index) ))) 
+        {
+          correlationMap.at("correlation", correlation_index) = corrNCC+1;  //set correlation
+          correlationMap.at("rotationNCC", correlation_index) = theta;    //set theta
+        }
+
+        valid = correlationMap.isValid(correlation_index, "SSD");
+        // if no value so far or correlation smaller or correlation higher than for other thetas
+        if (((valid == false) || (errSSD*1000 < correlationMap.at("SSD", correlation_index) ))) 
+        {
+          correlationMap.at("SSD", correlation_index) = errSSD*1000;  //set correlation
+          correlationMap.at("rotationSSD", correlation_index) = theta;    //set theta
+        }
+
+        valid = correlationMap.isValid(correlation_index, "SAD");
+        // if no value so far or correlation smaller or correlation higher than for other thetas
+        if (((valid == false) || (errSSD*1000000 < correlationMap.at("SAD", correlation_index) ))) 
+        {
+          correlationMap.at("SAD", correlation_index) = errSAD*1000000;  //set correlation
+          correlationMap.at("rotationSAD", correlation_index) = theta;    //set theta
+        }
+
+        valid = correlationMap.isValid(correlation_index, "MI");
+        // if no value so far or correlation smaller or correlation higher than for other thetas
+        if (((valid == false) || (mutInfo > correlationMap.at("MI", correlation_index) ))) 
+        {
+          correlationMap.at("MI", correlation_index) = mutInfo;  //set correlation
+          correlationMap.at("rotationMI", correlation_index) = theta;    //set theta
+        }
       }
     }
-    if (best_SSD[i] < bestSSD && best_SSD[i] <= SSDThreshold_) 
+    else
     {
-      if (acceptedThetas(SSD_row[i], SSD_col[i]) == int(360/angleIncrement_))
-      {
-        bestSSD = best_SSD[i];
-        bestThetaSSD = i*angleIncrement_;
-        grid_map::Position best_pos;
-        referenceMap_.getPosition(grid_map::Index(SSD_row[i], SSD_col[i]), best_pos);
-        bestXSSD = best_pos(0);
-        bestYSSD = best_pos(1);
-      }
-    }
-    if (best_SAD[i] < bestSAD && best_SAD[i] <= SADThreshold_) 
-    {
-      if (acceptedThetas(SAD_row[i], SAD_col[i]) == int(360/angleIncrement_))
-      {
-        bestSAD = best_SAD[i];
-        bestThetaSAD = i*angleIncrement_;
-        grid_map::Position best_pos;
-        referenceMap_.getPosition(grid_map::Index(SAD_row[i], SAD_col[i]), best_pos);
-        bestXSAD = best_pos(0);
-        bestYSAD = best_pos(1);
-      }
-    }
-    if (best_MI[i] > bestMI && best_MI[i] >= MIThreshold_) 
-    {
-      if (acceptedThetas(MI_row[i], MI_col[i]) == int(360/angleIncrement_))
-      {
-        bestMI = best_MI[i];
-        bestThetaMI = i*angleIncrement_;
-        grid_map::Position best_pos;
-        referenceMap_.getPosition(grid_map::Index(MI_row[i], MI_col[i]), best_pos);
-        bestXMI = best_pos(0);
-        bestYMI = best_pos(1);
-      }
+      SAD.push_back(10);
+      SSD.push_back(10);
+      NCC.push_back(-1);
+      MI.push_back(-10);
     }
   }
-  float z = findZ(bestXCorr, bestYCorr, bestThetaCorr);
+
+  grid_map_msgs::GridMap correlation_msg;
+  grid_map::GridMapRosConverter::toMessage(correlationMap, correlation_msg);
+  correlationPublisher_.publish(correlation_msg);
+
+  // search best score for all error measures
+  grid_map::Position best_pos;
+
+  std::vector<float>::iterator SADit = std::min_element(SAD.begin(), SAD.end());
+  int bestSADparticle = std::distance(SAD.begin(), SADit);
+  float bestSAD = SAD[bestSADparticle];
+  referenceMap_.getPosition(grid_map::Index(particleRow_[bestSADparticle], particleCol_[bestSADparticle]), best_pos);
+  float bestXSAD = best_pos(0);
+  float bestYSAD = best_pos(1);
+  int bestThetaSAD = particleTheta_[bestSADparticle];
+
+  std::vector<float>::iterator SSDit = std::min_element(SSD.begin(), SSD.end());
+  int bestSSDparticle = std::distance(SSD.begin(), SSDit);
+  float bestSSD = SSD[bestSSDparticle];
+  referenceMap_.getPosition(grid_map::Index(particleRow_[bestSSDparticle], particleCol_[bestSSDparticle]), best_pos);
+  float bestXSSD = best_pos(0);
+  float bestYSSD = best_pos(1);
+  int bestThetaSSD = particleTheta_[bestSSDparticle];
+
+  std::vector<float>::iterator NCCit = std::max_element(NCC.begin(), NCC.end());
+  int bestNCCparticle = std::distance(NCC.begin(), NCCit);
+  float bestNCC = NCC[bestNCCparticle];
+  referenceMap_.getPosition(grid_map::Index(particleRow_[bestNCCparticle], particleCol_[bestNCCparticle]), best_pos);
+  float bestXNCC = best_pos(0);
+  float bestYNCC = best_pos(1);
+  int bestThetaNCC = particleTheta_[bestNCCparticle];;
+
+  std::vector<float>::iterator MIit = std::max_element(MI.begin(), MI.end());
+  int bestMIparticle = std::distance(MI.begin(), MIit);
+  float bestMI = MI[bestMIparticle];
+  referenceMap_.getPosition(grid_map::Index(particleRow_[bestMIparticle], particleCol_[bestMIparticle]), best_pos);
+  float bestXMI = best_pos(0);
+  float bestYMI = best_pos(1);
+  int bestThetaMI = particleTheta_[bestMIparticle];;
+
+  // Calculate z alignement
+  float z = findZ(bestXNCC, bestYNCC, bestThetaNCC);
 
   ros::Time pubTime = ros::Time::now();
   // output best correlation and time used
-  if (bestCorr != -1) 
+  if (bestNCC != -1) 
   {
-    cumulativeErrorCorr_ += sqrt((bestXCorr - correct_position(0))*(bestXCorr - correct_position(0)) + (bestYCorr - correct_position(1))*(bestYCorr - correct_position(1)));
-    if (sqrt((bestXCorr - correct_position(0))*(bestXCorr - correct_position(0)) + (bestYCorr - correct_position(1))*(bestYCorr - correct_position(1))) < 0.5 && fabs(bestThetaCorr - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesCorr_ += 1;}
+    cumulativeErrorCorr_ += sqrt((bestXNCC - correct_position(0))*(bestXNCC - correct_position(0)) + (bestYNCC - correct_position(1))*(bestYNCC - correct_position(1)));
+    if (sqrt((bestXNCC - correct_position(0))*(bestXNCC - correct_position(0)) + (bestYNCC - correct_position(1))*(bestYNCC - correct_position(1))) < 0.5 && fabs(bestThetaNCC - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesCorr_ += 1;}
     geometry_msgs::PointStamped corrPoint;
-    corrPoint.point.x = bestXCorr;
-    corrPoint.point.y = bestYCorr;
-    corrPoint.point.z = bestThetaCorr;
+    corrPoint.point.x = bestXNCC;
+    corrPoint.point.y = bestYNCC;
+    corrPoint.point.z = bestThetaNCC;
     corrPoint.header.stamp = pubTime;
     corrPointPublisher_.publish(corrPoint);
   }
@@ -394,9 +327,12 @@ void MapFitter::exhaustiveSearch()
   correctPoint.header.stamp = pubTime;
   correctPointPublisher_.publish(correctPoint);
 
+  //update particles
+  //TODO
+
 
   ros::Duration duration = ros::Time::now() - time;
-  std::cout << "Best correlation " << bestCorr << " at " << bestXCorr << ", " << bestYCorr << " and theta " << bestThetaCorr << " and z: " << z << std::endl;
+  std::cout << "Best NCC " << bestNCC << " at " << bestXNCC << ", " << bestYNCC << " and theta " << bestThetaNCC << " and z: " << z << std::endl;
   std::cout << "Best SSD " << bestSSD << " at " << bestXSSD << ", " << bestYSSD << " and theta " << bestThetaSSD << std::endl;
   std::cout << "Best SAD " << bestSAD << " at " << bestXSAD << ", " << bestYSAD << " and theta " << bestThetaSAD << std::endl;
   std::cout << "Best MI " << bestMI << " at " << bestXMI << ", " << bestYMI << " and theta " << bestThetaMI << std::endl;
@@ -533,15 +469,11 @@ float MapFitter::mutualInformation()
   const int numberOfBins = 256;
 
   float minHeight = map_min_ - shifted_mean_;
-  if ((reference_min_ - reference_mean_) < minHeight)
-  {
-    minHeight = reference_min_ - reference_mean_;
-  }
+  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
+
   float maxHeight = map_max_ - shifted_mean_;
-  if ((reference_max_ - reference_mean_) > maxHeight)
-  {
-    maxHeight = reference_max_ - reference_mean_;
-  }
+  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
+
   float binWidth = (maxHeight - minHeight)/(numberOfBins - 1);
   float hist[numberOfBins] = {0.0};
   float referenceHist[numberOfBins] = {0.0};
@@ -563,21 +495,16 @@ float MapFitter::mutualInformation()
 
   for (int i = 0; i < numberOfBins; i++)
   {
-    if (hist[i]!=0.0) {entropy += fabs(hist[i])*log(fabs(hist[i]));}
-    if (referenceHist[i]!=0.0) {referenceEntropy += fabs(referenceHist[i])*log(fabs(referenceHist[i]));}
+    if (hist[i]!=0.0) {entropy += -hist[i]*log(hist[i]);}
+    if (referenceHist[i]!=0.0) {referenceEntropy += -referenceHist[i]*log(referenceHist[i]);}
 
     for (int j = 0; j < numberOfBins; j++)
     {
-      if (jointHist[i][j]!=0.0) {jointEntropy += fabs(jointHist[i][j])*log(fabs(jointHist[i][j]));}
+      if (jointHist[i][j]!=0.0) {jointEntropy += -jointHist[i][j]*log(jointHist[i][j]);}
     }
   }
 
-  entropy = -1*entropy;;
-  referenceEntropy = -1*referenceEntropy;
-  jointEntropy = -1*jointEntropy;
-
   //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
-
   return (entropy+referenceEntropy-jointEntropy);
 }
 
@@ -586,15 +513,10 @@ float MapFitter::weightedMutualInformation()
   const int numberOfBins = 256;
 
   float minHeight = map_min_ - shifted_mean_;
-  if ((reference_min_ - reference_mean_) < minHeight)
-  {
-    minHeight = reference_min_ - reference_mean_;
-  }
+  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
+
   float maxHeight = map_max_ - shifted_mean_;
-  if ((reference_max_ - reference_mean_) > maxHeight)
-  {
-    maxHeight = reference_max_ - reference_mean_;
-  }
+  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
 
   float binWidth = (maxHeight - minHeight)/(numberOfBins - 1);
   float hist[numberOfBins] = {0.0};
@@ -617,18 +539,14 @@ float MapFitter::weightedMutualInformation()
 
   for (int i = 0; i < numberOfBins; i++)
   {
-    if (hist[i]!=0.0) {entropy += fabs(hist[i])*log(fabs(hist[i]));}
-    if (referenceHist[i]!=0.0) {referenceEntropy += fabs(referenceHist[i])*log(fabs(referenceHist[i]));}
+    if (hist[i]!=0.0) { entropy += -hist[i]*log(hist[i]); }
+    if (referenceHist[i]!=0.0) { referenceEntropy += -referenceHist[i]*log(referenceHist[i]); }
 
     for (int j = 0; j < numberOfBins; j++)
     {
-      if (jointHist[i][j]!=0.0) {jointEntropy += weightedHist_[i][j]*fabs(jointHist[i][j])*log(fabs(jointHist[i][j]));}
+      if (jointHist[i][j]!=0.0) { jointEntropy += -float(abs(j-i)+1)/12*jointHist[i][j]*log(jointHist[i][j]); }
     }
   }
-
-  entropy = -1*entropy;;
-  referenceEntropy = -1*referenceEntropy;
-  jointEntropy = -1*jointEntropy;
 
   //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
   return (entropy+referenceEntropy-jointEntropy);
@@ -657,7 +575,7 @@ float MapFitter::weightedErrorSAD()
     float shifted = (xy_shifted_[i]-shifted_mean_)/std::numeric_limits<unsigned short>::max();
     float reference = (xy_reference_[i]-reference_mean_)/std::numeric_limits<unsigned short>::max();
     error += fabs(shifted-reference) * xy_shifted_var_[i];// * xy_reference_var_[i];
-    normalization += xy_shifted_var_[i];// * (xy_reference_var_[i]/std::numeric_limits<unsigned short>::max());
+    normalization += xy_shifted_var_[i];// * (xy_reference_var_[i]
   }
   // divide error by number of matches
   //std::cout << error/normalization <<std::endl;
@@ -687,7 +605,7 @@ float MapFitter::weightedErrorSSD()
     float shifted = (xy_shifted_[i]-shifted_mean_)/std::numeric_limits<unsigned short>::max();
     float reference = (xy_reference_[i]-reference_mean_)/std::numeric_limits<unsigned short>::max();
     error += sqrt(fabs(shifted-reference)) * xy_shifted_var_[i]*xy_shifted_var_[i];// * xy_reference_var_[i]; //sqrt(fabs(shifted-reference)) instead of (shifted-reference)*(shifted-reference), since values are in between 0 and 1
-    normalization += xy_shifted_var_[i]*xy_shifted_var_[i];// * (xy_reference_var_[i]/std::numeric_limits<unsigned short>::max());
+    normalization += xy_shifted_var_[i]*xy_shifted_var_[i];// * (xy_reference_var_[i]
   }
   // divide error by number of matches
   //std::cout << error/normalization <<std::endl;
@@ -724,13 +642,6 @@ float MapFitter::weightedCorrelationNCC()
     correlation += shifted_corr*reference_corr * xy_shifted_var_[i];
     shifted_normal += xy_shifted_var_[i]*shifted_corr*shifted_corr;// shifted_corr*shifted_corr * xy_shifted_var_[i];
     reference_normal += xy_shifted_var_[i]*reference_corr*reference_corr;// reference_corr*reference_corr * xy_shifted_var_[i];
-    
-    //for 1 - variance
-    /*float shifted_corr = (xy_shifted_[i]-shifted_mean_)* xy_shifted_var_[i];
-    float reference_corr = (xy_reference_[i]-reference_mean_);// * xy_reference_var_[i];
-    correlation += shifted_corr*reference_corr;
-    shifted_normal += shifted_corr * shifted_corr;
-    reference_normal += reference_corr * reference_corr;*/
   }
   return correlation/sqrt(shifted_normal*reference_normal);
 }
