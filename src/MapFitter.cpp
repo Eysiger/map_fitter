@@ -255,13 +255,13 @@ void MapFitter::exhaustiveSearch()
           correlationMap.at("rotationSAD", correlation_index) = theta;    //set theta
         }
 
-        valid = correlationMap.isValid(correlation_index, "MI");
+        /*valid = correlationMap.isValid(correlation_index, "MI");
         // if no value so far or correlation smaller or correlation higher than for other thetas
         if (((valid == false) || (mutInfo > correlationMap.at("MI", correlation_index) ))) 
         {
           correlationMap.at("MI", correlation_index) = mutInfo;  //set correlation
           correlationMap.at("rotationMI", correlation_index) = theta;    //set theta
-        }
+        }*/
       }
     }
     else
