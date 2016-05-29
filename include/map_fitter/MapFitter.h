@@ -16,6 +16,7 @@
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
 #include <grid_map_core/GridMap.hpp>
+#include <grid_map_core/iterators/GridMapIterator.hpp>
 #include <grid_map_core/iterators/GridMapIteratorSparse.hpp>
 #include <grid_map_core/iterators/SubmapIteratorSparse.hpp>
 #include <grid_map_ros/GridMapRosConverter.hpp>
@@ -145,7 +146,7 @@ private:
 
 
     tf::TransformBroadcaster broadcaster_;
-    
+
 
     float map_min_;
     float map_max_;
@@ -158,6 +159,8 @@ private:
 
     //! Grid map publisher.
     ros::Publisher correlationPublisher_;
+
+    ros::Publisher referencePublisher_;
 
     ros::Publisher corrPointPublisher_;
     ros::Publisher SSDPointPublisher_;
@@ -189,6 +192,7 @@ private:
     std::vector<int> particleCol_;
     std::vector<int> particleTheta_;
     int numberOfParticles_;
+    grid_map::Position correct_position_;
 
     ros::Duration duration1_;
     ros::Duration duration2_;

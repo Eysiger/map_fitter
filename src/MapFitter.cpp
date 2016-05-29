@@ -18,6 +18,7 @@ MapFitter::MapFitter(ros::NodeHandle& nodeHandle)
   readParameters();
   shiftedPublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>(shiftedMapTopic_,1);   // publisher for shifted_map
   correlationPublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>(correlationMapTopic_,1);    // publisher for correlation_map
+  referencePublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>(referenceMapTopic_,1);
   activityCheckTimer_ = nodeHandle_.createTimer(activityCheckDuration_,
                                                 &MapFitter::updateSubscriptionCallback,
                                                 this);
@@ -79,6 +80,12 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
   grid_map::GridMapRosConverter::fromMessage(message, map_);
 
   grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
+  referenceMap_.move(grid_map::Position(2.75,1));
+  //grid_map::GridMap extendMap;
+  //extendMap.setGeometry(grid_map::Length(10.5,7.5), referenceMap_.getResolution(), referenceMap_.getPosition());
+  //extendMap.setFrameId("grid_map");
+  //referenceMap_.extendToInclude(extendMap);
+  
   //grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_);
 
   exhaustiveSearch();
@@ -107,7 +114,8 @@ void MapFitter::exhaustiveSearch()
   NCC.clear();
   MI.clear();
 
-  grid_map::Position correct_position = map_.getPosition();
+  grid_map::Position previous_position = correct_position_;
+  correct_position_ = map_.getPosition();
   grid_map::Position position = referenceMap_.getPosition();
   grid_map::Size size = map_.getSize();
   grid_map::Index start_index = map_.getStartIndex();
@@ -133,13 +141,29 @@ void MapFitter::exhaustiveSearch()
   referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
   //std::cout << reference_start_index.transpose() << " reference_size: "<< reference_size.transpose() << "submap" << submap_start_index.transpose() << " size " << submap_size.transpose() << std::endl;
 
-  templateRotation_ = static_cast <float> (rand() / static_cast <float> (RAND_MAX/360)); //rand() %360;
 
+  for (grid_map::GridMapIterator iterator(referenceMap_); !iterator.isPastEnd(); ++iterator) 
+  {
+    grid_map::Index index(*iterator);
+    grid_map::Index shaped_index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
+    grid_map::Index shaped_submap_start_index = grid_map::getIndexFromBufferIndex(submap_start_index, reference_size, reference_start_index);
+    bool outside_submap = (shaped_index(0) < shaped_submap_start_index(0) || shaped_index(1) < shaped_submap_start_index(1) || shaped_index(0) > shaped_submap_start_index(0)+submap_size(0) || shaped_index(1) > shaped_submap_start_index(1)+submap_size(1));
+    if ( outside_submap )
+    {
+      referenceMap_.at("elevation", index) = -0.75;
+    }
+  }
+  grid_map_msgs::GridMap reference_msg;
+  grid_map::GridMapRosConverter::toMessage(referenceMap_, reference_msg);
+  referencePublisher_.publish(reference_msg);
+
+  //float oldTemplateRotation = templateRotation_;
+  //templateRotation_ = static_cast <float> (rand() / static_cast <float> (RAND_MAX/360)); //rand() %360;
   // initialize particles
   if (isFirst_)
   {
     numberOfParticles_ = 0;
-    for (float theta = templateRotation_; theta < 360 + templateRotation_; theta+=angleIncrement_)
+    for (float theta = 0; theta < 360; theta+=angleIncrement_)
     {
       for (grid_map::SubmapIteratorSparse iterator(referenceMap_, submap_start_index, submap_size, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
       //for (grid_map::GridMapIteratorSparse iterator(referenceMap_, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
@@ -147,14 +171,26 @@ void MapFitter::exhaustiveSearch()
         grid_map::Index index(*iterator);
         particleRow_.push_back(index(0));
         particleCol_.push_back(index(1));
-        particleTheta_.push_back(round(theta-templateRotation_));
+        particleTheta_.push_back(theta);
         numberOfParticles_ += 1;
       }
     }
+    templateRotation_ = static_cast <float> (rand() / static_cast <float> (RAND_MAX/360)); //rand() %360;
+
     std::cout <<"Number of particles: " << numberOfParticles_ << std::endl;
     isFirst_ = false;
   }
+  else
+  {
+    std::transform(particleRow_.begin(), particleRow_.end(), particleRow_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows ) ));
+    std::transform(particleRow_.begin(), particleRow_.end(), particleRow_.begin(), std::bind2nd(std::modulus<int>(), rows));
+    std::transform(particleCol_.begin(), particleCol_.end(), particleCol_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols ) ));
+    std::transform(particleCol_.begin(), particleCol_.end(), particleCol_.begin(), std::bind2nd(std::modulus<int>(), cols));
+  //  std::transform(particleTheta_.begin(), particleTheta_.end(), particleTheta_.begin(), std::bind1st(std::plus<int>(), round((360-int(templateRotation_))%360-(360-int(oldTemplateRotation))%360 )));
+  //  std::transform(particleTheta_.begin(), particleTheta_.end(), particleTheta_.begin(), std::bind1st(std::modulus<int>(), 360));
+  }
 
+  ros::Time time2 = ros::Time::now();
   for (int i = 0; i < numberOfParticles_; i++)
   {
     int row = particleRow_[i];
@@ -164,8 +200,9 @@ void MapFitter::exhaustiveSearch()
 
     float sin_theta = sin((theta+templateRotation_)/180*M_PI);
     float cos_theta = cos((theta+templateRotation_)/180*M_PI);
+duration2_ += ros::Time::now() - time2;
     bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
-
+time2 = ros::Time::now();
     if (success) 
     {
       float errSAD = errorSAD();
@@ -194,7 +231,7 @@ void MapFitter::exhaustiveSearch()
 
         bool valid = correlationMap.isValid(correlation_index, "correlation");
         // if no value so far or correlation smaller or correlation higher than for other thetas
-        if (((valid == false) || (corrNCC+1 > correlationMap.at("correlation", correlation_index) ))) 
+        if (((valid == false) || (corrNCC+1 > correlationMap.at("correlation", correlation_index) )))// && fabs(theta - (360-int(templateRotation_))%360) < angleIncrement_) 
         {
           correlationMap.at("correlation", correlation_index) = corrNCC+1;  //set correlation
           correlationMap.at("rotationNCC", correlation_index) = theta;    //set theta
@@ -238,6 +275,8 @@ void MapFitter::exhaustiveSearch()
   grid_map::GridMapRosConverter::toMessage(correlationMap, correlation_msg);
   correlationPublisher_.publish(correlation_msg);
 
+  duration2_ += ros::Time::now() - time2;
+  
   // search best score for all error measures
   grid_map::Position best_pos;
 
@@ -271,7 +310,8 @@ void MapFitter::exhaustiveSearch()
   referenceMap_.getPosition(grid_map::Index(particleRow_[bestMIparticle], particleCol_[bestMIparticle]), best_pos);
   float bestXMI = best_pos(0);
   float bestYMI = best_pos(1);
-  int bestThetaMI = particleTheta_[bestMIparticle];;
+  int bestThetaMI = particleTheta_[bestMIparticle];
+
 
   // Calculate z alignement
   float z = findZ(bestXNCC, bestYNCC, bestThetaNCC);
@@ -280,8 +320,8 @@ void MapFitter::exhaustiveSearch()
   // output best correlation and time used
   if (bestNCC != -1) 
   {
-    cumulativeErrorCorr_ += sqrt((bestXNCC - correct_position(0))*(bestXNCC - correct_position(0)) + (bestYNCC - correct_position(1))*(bestYNCC - correct_position(1)));
-    if (sqrt((bestXNCC - correct_position(0))*(bestXNCC - correct_position(0)) + (bestYNCC - correct_position(1))*(bestYNCC - correct_position(1))) < 0.5 && fabs(bestThetaNCC - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesCorr_ += 1;}
+    cumulativeErrorCorr_ += sqrt((bestXNCC - correct_position_(0))*(bestXNCC - correct_position_(0)) + (bestYNCC - correct_position_(1))*(bestYNCC - correct_position_(1)));
+    if (sqrt((bestXNCC - correct_position_(0))*(bestXNCC - correct_position_(0)) + (bestYNCC - correct_position_(1))*(bestYNCC - correct_position_(1))) < 0.5 && fabs(bestThetaNCC - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesCorr_ += 1;}
     geometry_msgs::PointStamped corrPoint;
     corrPoint.point.x = bestXNCC;
     corrPoint.point.y = bestYNCC;
@@ -291,8 +331,8 @@ void MapFitter::exhaustiveSearch()
   }
   if (bestSSD != 10) 
   {
-    cumulativeErrorSSD_ += sqrt((bestXSSD - correct_position(0))*(bestXSSD - correct_position(0)) + (bestYSSD - correct_position(1))*(bestYSSD - correct_position(1)));
-    if (sqrt((bestXSSD - correct_position(0))*(bestXSSD - correct_position(0)) + (bestYSSD - correct_position(1))*(bestYSSD - correct_position(1))) < 0.5 && fabs(bestThetaSSD - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesSSD_ += 1;}
+    cumulativeErrorSSD_ += sqrt((bestXSSD - correct_position_(0))*(bestXSSD - correct_position_(0)) + (bestYSSD - correct_position_(1))*(bestYSSD - correct_position_(1)));
+    if (sqrt((bestXSSD - correct_position_(0))*(bestXSSD - correct_position_(0)) + (bestYSSD - correct_position_(1))*(bestYSSD - correct_position_(1))) < 0.5 && fabs(bestThetaSSD - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesSSD_ += 1;}
     geometry_msgs::PointStamped SSDPoint;
     SSDPoint.point.x = bestXSSD;
     SSDPoint.point.y = bestYSSD;
@@ -302,8 +342,8 @@ void MapFitter::exhaustiveSearch()
   }
   if (bestSAD != 10) 
   {
-    cumulativeErrorSAD_ += sqrt((bestXSAD - correct_position(0))*(bestXSAD - correct_position(0)) + (bestYSAD - correct_position(1))*(bestYSAD - correct_position(1)));
-    if (sqrt((bestXSAD - correct_position(0))*(bestXSAD - correct_position(0)) + (bestYSAD - correct_position(1))*(bestYSAD - correct_position(1))) < 0.5 && fabs(bestThetaSAD - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesSAD_ += 1;}
+    cumulativeErrorSAD_ += sqrt((bestXSAD - correct_position_(0))*(bestXSAD - correct_position_(0)) + (bestYSAD - correct_position_(1))*(bestYSAD - correct_position_(1)));
+    if (sqrt((bestXSAD - correct_position_(0))*(bestXSAD - correct_position_(0)) + (bestYSAD - correct_position_(1))*(bestYSAD - correct_position_(1))) < 0.5 && fabs(bestThetaSAD - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesSAD_ += 1;}
     geometry_msgs::PointStamped SADPoint;
     SADPoint.point.x = bestXSAD;
     SADPoint.point.y = bestYSAD;
@@ -313,8 +353,8 @@ void MapFitter::exhaustiveSearch()
   }
   if (bestMI != 0) 
   {
-    cumulativeErrorMI_ += sqrt((bestXMI - correct_position(0))*(bestXMI - correct_position(0)) + (bestYMI - correct_position(1))*(bestYMI - correct_position(1)));
-    if (sqrt((bestXMI - correct_position(0))*(bestXMI - correct_position(0)) + (bestYMI - correct_position(1))*(bestYMI - correct_position(1))) < 0.5 && fabs(bestThetaMI - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesMI_ += 1;}
+    cumulativeErrorMI_ += sqrt((bestXMI - correct_position_(0))*(bestXMI - correct_position_(0)) + (bestYMI - correct_position_(1))*(bestYMI - correct_position_(1)));
+    if (sqrt((bestXMI - correct_position_(0))*(bestXMI - correct_position_(0)) + (bestYMI - correct_position_(1))*(bestYMI - correct_position_(1))) < 0.5 && fabs(bestThetaMI - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesMI_ += 1;}
     geometry_msgs::PointStamped MIPoint;
     MIPoint.point.x = bestXMI;
     MIPoint.point.y = bestYMI;
@@ -323,61 +363,59 @@ void MapFitter::exhaustiveSearch()
     MIPointPublisher_.publish(MIPoint);
   }
   geometry_msgs::PointStamped correctPoint;
-  correctPoint.point.x = correct_position(0);
-  correctPoint.point.y = correct_position(1);
+  correctPoint.point.x = correct_position_(0);
+  correctPoint.point.y = correct_position_(1);
   correctPoint.point.z = (360.0-templateRotation_);
   correctPoint.header.stamp = pubTime;
   correctPointPublisher_.publish(correctPoint);
 
+  ros::Duration duration = ros::Time::now() - time;
+  std::cout << "Best NCC " << bestNCC << " at " << bestXNCC << ", " << bestYNCC << " and theta " << bestThetaNCC << " and z: " << z << std::endl;
+  std::cout << "Best SSD " << bestSSD << " at " << bestXSSD << ", " << bestYSSD << " and theta " << bestThetaSSD << std::endl;
+  std::cout << "Best SAD " << bestSAD << " at " << bestXSAD << ", " << bestYSAD << " and theta " << bestThetaSAD << std::endl;
+  std::cout << "Best MI " << bestMI << " at " << bestXMI << ", " << bestYMI << " and theta " << bestThetaMI << std::endl;
+  std::cout << "Correct position " << correct_position_.transpose() << " and theta " << (360.0-templateRotation_) << std::endl;
+  std::cout << "Time used: " << duration.toSec() << " Sekunden" << " 1: " << duration1_.toSec() << " 2: " << duration2_.toSec() << std::endl;
+  std::cout << "Cumulative error NCC: " << cumulativeErrorCorr_ << " matches: " << correctMatchesCorr_ << " SSD: " << cumulativeErrorSSD_ << " matches: " << correctMatchesSSD_ << " SAD: " << cumulativeErrorSAD_ << " matches: " << correctMatchesSAD_ << " MI: " << cumulativeErrorMI_ << " matches: " << correctMatchesMI_ << std::endl;
+
   //update & resample particles
-  //threshold for acceptance?
   std::vector<float> beta;
   beta.clear();
   for (int i = 0; i < numberOfParticles_; i++)
   {
-    if (NCC[i] > 0.0) { beta.push_back(NCC[i]); }
-    else { beta.push_back(0.0); }
+      if (NCC[i] >= 0.5*bestNCC) { beta.push_back(NCC[i]); }   //threshold for acceptance?
+      else { beta.push_back(0.0); }
   }
   float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-  std::cout << sum << std::endl;
   std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
   std::partial_sum(beta.begin(), beta.end(), beta.begin());
-  std::cout << beta[numberOfParticles_-1] << std::endl;
 
   std::vector< std::vector<int> > newParticles;
   newParticles.clear();
 
   std::default_random_engine generator;
-  std::normal_distribution<float> distribution(0.0,5.0);
-  std::cout << "normal dist initialized" << std::endl;
-  //int newNumberOfParticles = 0;
+  std::normal_distribution<float> distribution(0.0,2.0);
   for (int i = 0; i < numberOfParticles_; i++)
   {
     float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta[numberOfParticles_-1]-beta[0]) + beta[0];
     int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
 
-    int rowShift = round(distribution(generator));
-    if (particleRow_[ind] + rowShift >= rows && particleRow_[ind] + rowShift < 0)
-      { rowShift = -rowShift; }
-
-    int colShift = round(distribution(generator));
-    if (particleCol_[ind] + colShift >= cols && particleCol_[ind] + colShift < 0)
-         { colShift = -colShift; }
-
     std::vector<int> particle;
     particle.clear();
-    particle.push_back(particleRow_[ind] + rowShift);
-    particle.push_back(particleCol_[ind] + colShift);
-    particle.push_back(int(particleTheta_[ind] + round(distribution(generator))) % 360);
+
+    particle.push_back( int(particleRow_[ind] + round(distribution(generator)) + rows) % rows );
+    particle.push_back( int(particleCol_[ind] + round(distribution(generator)) + cols) % cols );
+    particle.push_back( int( particleTheta_[ind] + round(distribution(generator)) ) % 360);
     newParticles.push_back(particle);
   }
-  std::sort(newParticles.begin(), newParticles.end());
-  auto last = std::unique(newParticles.begin(), newParticles.end());
-  newParticles.erase(last, newParticles.end());
+  if (numberOfParticles_ > 4000)
+  {
+    std::sort(newParticles.begin(), newParticles.end());
+    auto last = std::unique(newParticles.begin(), newParticles.end());
+    newParticles.erase(last, newParticles.end());
+  }
 
-  numberOfParticles_ = newParticles.size();//newNumberOfParticles;
-  std::cout <<"New number of particles: " << numberOfParticles_ << std::endl;
-
+  numberOfParticles_ = newParticles.size();
   particleRow_.clear();
   particleCol_.clear();
   particleTheta_.clear();
@@ -389,14 +427,7 @@ void MapFitter::exhaustiveSearch()
     particleTheta_.push_back(newParticles[i][2]);
   }
 
-  ros::Duration duration = ros::Time::now() - time;
-  std::cout << "Best NCC " << bestNCC << " at " << bestXNCC << ", " << bestYNCC << " and theta " << bestThetaNCC << " and z: " << z << std::endl;
-  std::cout << "Best SSD " << bestSSD << " at " << bestXSSD << ", " << bestYSSD << " and theta " << bestThetaSSD << std::endl;
-  std::cout << "Best SAD " << bestSAD << " at " << bestXSAD << ", " << bestYSAD << " and theta " << bestThetaSAD << std::endl;
-  std::cout << "Best MI " << bestMI << " at " << bestXMI << ", " << bestYMI << " and theta " << bestThetaMI << std::endl;
-  std::cout << "Correct position " << correct_position.transpose() << " and theta " << (360.0-templateRotation_) << std::endl;
-  std::cout << "Time used: " << duration.toSec() << " Sekunden" << " 1: " << duration1_.toSec() << " 2: " << duration2_.toSec() << std::endl;
-  std::cout << "Cumulative error NCC: " << cumulativeErrorCorr_ << " matches: " << correctMatchesCorr_ << " SSD: " << cumulativeErrorSSD_ << " matches: " << correctMatchesSSD_ << " SAD: " << cumulativeErrorSAD_ << " matches: " << correctMatchesSAD_ << " MI: " << cumulativeErrorMI_ << " matches: " << correctMatchesMI_ << std::endl;
+  std::cout <<"New number of particles: " << numberOfParticles_ << std::endl;
   ROS_INFO("done");
   isActive_ = false;
 }
@@ -444,6 +475,7 @@ float MapFitter::findZ(float x, float y, int theta)
 
 bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float sin_theta, float cos_theta)
 {
+  ros::Time time1 = ros::Time::now();
   // initialize
   int points = 0;
   matches_ = 0;
@@ -478,17 +510,15 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
       int index_y = (start_index_y + j) % size_y;
 
       float mapHeight = data(index_x, index_y);
-        ros::Time time1 = ros::Time::now();
       if (mapHeight == mapHeight)
       {
         points += 1;
         int reference_buffer_index_x = reference_size_x - reference_start_index_x + reference_index_x;
         int reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
 
-              ros::Time time2 = ros::Time::now();
         int shifted_index_x = reference_buffer_index_x % reference_size_x - round(cos_theta*(float(size_x)/2-i) - sin_theta*(float(size_y)/2-j));
         int shifted_index_y = reference_buffer_index_y % reference_size_y - sin_theta*(float(size_x)/2-i) - cos_theta*(float(size_y)/2-j);
-              duration2_ += ros::Time::now() - time2;
+              
         if (shifted_index_x >= 0 && shifted_index_x < reference_size_x && shifted_index_y >= 0 && shifted_index_y < reference_size_y )
         {
           shifted_index_x = (shifted_index_x + reference_start_index_x) % reference_size_x;
@@ -507,11 +537,11 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
           }
         }
       }
-       duration1_ += ros::Time::now() - time1;
+      
     }
   }
 
-
+ duration1_ += ros::Time::now() - time1;
   // check if required overlap is fulfilled
   if (matches_ > points*requiredOverlap_) 
   { 
