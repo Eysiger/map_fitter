@@ -305,13 +305,13 @@ void MapFitter::exhaustiveSearch()
   float bestYNCC = best_pos(1);
   int bestThetaNCC = particleTheta_[bestNCCparticle];;
 
-  std::vector<float>::iterator MIit = std::max_element(MI.begin(), MI.end());
+  /*std::vector<float>::iterator MIit = std::max_element(MI.begin(), MI.end());
   int bestMIparticle = std::distance(MI.begin(), MIit);
   float bestMI = MI[bestMIparticle];
   referenceMap_.getPosition(grid_map::Index(particleRow_[bestMIparticle], particleCol_[bestMIparticle]), best_pos);
   float bestXMI = best_pos(0);
   float bestYMI = best_pos(1);
-  int bestThetaMI = particleTheta_[bestMIparticle];
+  int bestThetaMI = particleTheta_[bestMIparticle];*/
 
 
   // Calculate z alignement
@@ -352,7 +352,7 @@ void MapFitter::exhaustiveSearch()
     SADPoint.header.stamp = pubTime;
     SADPointPublisher_.publish(SADPoint);
   }
-  if (bestMI != 0) 
+  /*if (bestMI != 0) 
   {
     cumulativeErrorMI_ += sqrt((bestXMI - correct_position_(0))*(bestXMI - correct_position_(0)) + (bestYMI - correct_position_(1))*(bestYMI - correct_position_(1)));
     if (sqrt((bestXMI - correct_position_(0))*(bestXMI - correct_position_(0)) + (bestYMI - correct_position_(1))*(bestYMI - correct_position_(1))) < 0.5 && fabs(bestThetaMI - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesMI_ += 1;}
@@ -362,7 +362,7 @@ void MapFitter::exhaustiveSearch()
     MIPoint.point.z = bestThetaMI;
     MIPoint.header.stamp = pubTime;
     MIPointPublisher_.publish(MIPoint);
-  }
+  }*/
   geometry_msgs::PointStamped correctPoint;
   correctPoint.point.x = correct_position_(0);
   correctPoint.point.y = correct_position_(1);
@@ -374,7 +374,7 @@ void MapFitter::exhaustiveSearch()
   std::cout << "Best NCC " << bestNCC << " at " << bestXNCC << ", " << bestYNCC << " and theta " << bestThetaNCC << " and z: " << z << std::endl;
   std::cout << "Best SSD " << bestSSD << " at " << bestXSSD << ", " << bestYSSD << " and theta " << bestThetaSSD << std::endl;
   std::cout << "Best SAD " << bestSAD << " at " << bestXSAD << ", " << bestYSAD << " and theta " << bestThetaSAD << std::endl;
-  std::cout << "Best MI " << bestMI << " at " << bestXMI << ", " << bestYMI << " and theta " << bestThetaMI << std::endl;
+  //std::cout << "Best MI " << bestMI << " at " << bestXMI << ", " << bestYMI << " and theta " << bestThetaMI << std::endl;
   std::cout << "Correct position " << correct_position_.transpose() << " and theta " << (360.0-templateRotation_) << std::endl;
   std::cout << "Time used: " << duration.toSec() << " Sekunden" << " 1: " << duration1_.toSec() << " 2: " << duration2_.toSec() << std::endl;
   std::cout << "Cumulative error NCC: " << cumulativeErrorCorr_ << " matches: " << correctMatchesCorr_ << " SSD: " << cumulativeErrorSSD_ << " matches: " << correctMatchesSSD_ << " SAD: " << cumulativeErrorSAD_ << " matches: " << correctMatchesSAD_ << " MI: " << cumulativeErrorMI_ << " matches: " << correctMatchesMI_ << std::endl;
