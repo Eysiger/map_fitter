@@ -132,6 +132,8 @@ void MapFitter::exhaustiveSearch()
   duration2_.sec = 0;
   duration2_.nsec = 0;
 
+  std::normal_distribution<float> distribution(0.0,2.0);
+
   grid_map::Matrix& reference_data = referenceMap_["elevation"];
   grid_map::Matrix& data = map_["elevation"];
   grid_map::Matrix& variance_data = map_["variance"];
@@ -157,8 +159,6 @@ void MapFitter::exhaustiveSearch()
   grid_map::GridMapRosConverter::toMessage(referenceMap_, reference_msg);
   referencePublisher_.publish(reference_msg);
 
-  //float oldTemplateRotation = templateRotation_;
-  //templateRotation_ = static_cast <float> (rand() / static_cast <float> (RAND_MAX/360)); //rand() %360;
   // initialize particles
   if (isFirst_)
   {
@@ -184,13 +184,13 @@ void MapFitter::exhaustiveSearch()
   {
     std::transform(particleRow_.begin(), particleRow_.end(), particleRow_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows ) ));
     std::transform(particleRow_.begin(), particleRow_.end(), particleRow_.begin(), std::bind2nd(std::modulus<int>(), rows));
+
     std::transform(particleCol_.begin(), particleCol_.end(), particleCol_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols ) ));
     std::transform(particleCol_.begin(), particleCol_.end(), particleCol_.begin(), std::bind2nd(std::modulus<int>(), cols));
-  //  std::transform(particleTheta_.begin(), particleTheta_.end(), particleTheta_.begin(), std::bind1st(std::plus<int>(), round((360-int(templateRotation_))%360-(360-int(oldTemplateRotation))%360 )));
-  //  std::transform(particleTheta_.begin(), particleTheta_.end(), particleTheta_.begin(), std::bind1st(std::modulus<int>(), 360));
+
+    templateRotation_ = fmod(templateRotation_ + distribution(generator_)/2 + 360, 360);
   }
 
-  ros::Time time2 = ros::Time::now();
   for (int i = 0; i < numberOfParticles_; i++)
   {
     int row = particleRow_[i];
@@ -200,11 +200,12 @@ void MapFitter::exhaustiveSearch()
 
     float sin_theta = sin((theta+templateRotation_)/180*M_PI);
     float cos_theta = cos((theta+templateRotation_)/180*M_PI);
-duration2_ += ros::Time::now() - time2;
+
     bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
-time2 = ros::Time::now();
+    ros::Time time2 = ros::Time::now();
     if (success) 
     {
+      
       float errSAD = errorSAD();
       float errSSD = errorSSD();
       float corrNCC = correlationNCC();
@@ -213,12 +214,13 @@ time2 = ros::Time::now();
       //float errSAD = weightedErrorSAD();
       //float errSSD = weightedErrorSSD();
       //float corrNCC = weightedCorrelationNCC();
-      float mutInfo = weightedMutualInformation();
+      //float mutInfo = weightedMutualInformation();
+
 
       SAD.push_back(errSAD);
       SSD.push_back(errSSD);
       NCC.push_back(corrNCC);
-      MI.push_back(mutInfo);
+      //MI.push_back(mutInfo);
 
       //acceptedThetas(index(0), index(1)) += 1;
 
@@ -269,13 +271,12 @@ time2 = ros::Time::now();
       NCC.push_back(-1);
       MI.push_back(-10);
     }
+    duration2_ += ros::Time::now() - time2;
   }
 
   grid_map_msgs::GridMap correlation_msg;
   grid_map::GridMapRosConverter::toMessage(correlationMap, correlation_msg);
   correlationPublisher_.publish(correlation_msg);
-
-  duration2_ += ros::Time::now() - time2;
   
   // search best score for all error measures
   grid_map::Position best_pos;
@@ -383,7 +384,7 @@ time2 = ros::Time::now();
   beta.clear();
   for (int i = 0; i < numberOfParticles_; i++)
   {
-      if (NCC[i] >= 0.5*bestNCC) { beta.push_back(NCC[i]); }   //threshold for acceptance?
+      if (NCC[i] >= 0.6*bestNCC) { beta.push_back(NCC[i]); }   //threshold for acceptance?
       else { beta.push_back(0.0); }
   }
   float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
@@ -393,27 +394,24 @@ time2 = ros::Time::now();
   std::vector< std::vector<int> > newParticles;
   newParticles.clear();
 
-  std::default_random_engine generator;
-  std::normal_distribution<float> distribution(0.0,2.0);
+  if (numberOfParticles_ < 4000) { numberOfParticles_ = 4000; }
   for (int i = 0; i < numberOfParticles_; i++)
   {
-    float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta[numberOfParticles_-1]-beta[0]) + beta[0];
+    float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
     int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
 
     std::vector<int> particle;
     particle.clear();
 
-    particle.push_back( int(particleRow_[ind] + round(distribution(generator)) + rows) % rows );
-    particle.push_back( int(particleCol_[ind] + round(distribution(generator)) + cols) % cols );
-    particle.push_back( int( particleTheta_[ind] + round(distribution(generator)) ) % 360);
+    particle.push_back( int(particleRow_[ind] + round(distribution(generator_)) + rows) % rows );
+    particle.push_back( int(particleCol_[ind] + round(distribution(generator_)) + cols) % cols );
+    particle.push_back( int( particleTheta_[ind] + round(distribution(generator_)) + 360) % 360);
     newParticles.push_back(particle);
   }
-  if (numberOfParticles_ > 4000)
-  {
-    std::sort(newParticles.begin(), newParticles.end());
-    auto last = std::unique(newParticles.begin(), newParticles.end());
-    newParticles.erase(last, newParticles.end());
-  }
+  
+  std::sort(newParticles.begin(), newParticles.end());
+  auto last = std::unique(newParticles.begin(), newParticles.end());
+  newParticles.erase(last, newParticles.end());
 
   numberOfParticles_ = newParticles.size();
   particleRow_.clear();
@@ -734,7 +732,8 @@ float MapFitter::weightedCorrelationNCC()
   return correlation/sqrt(shifted_normal*reference_normal);
 }
 
-void MapFitter::tfBroadcast(const ros::TimerEvent&) {
+void MapFitter::tfBroadcast(const ros::TimerEvent&) 
+{
   broadcaster_.sendTransform(
       tf::StampedTransform(
         tf::Transform(tf::Quaternion(0, 0, 0, 1), tf::Vector3(0.0, 0.0, 0.0)), 

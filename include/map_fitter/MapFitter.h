@@ -193,6 +193,7 @@ private:
     std::vector<int> particleTheta_;
     int numberOfParticles_;
     grid_map::Position correct_position_;
+    std::default_random_engine generator_;
 
     ros::Duration duration1_;
     ros::Duration duration2_;
