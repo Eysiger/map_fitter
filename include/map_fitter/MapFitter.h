@@ -115,6 +115,10 @@ private:
     bool isFirst_;
 
     std::string set_;
+    bool SAD_; 
+    bool SSD_;
+    bool NCC_;
+    bool MI_;
 
     bool weighted_;
 
@@ -140,7 +144,7 @@ private:
     float requiredOverlap_;
 
 
-    float corrThreshold_;
+    float NCCThreshold_;
 
     float SSDThreshold_;
 
@@ -191,13 +195,25 @@ private:
     std::vector<float> xy_reference_var_;
 
     float templateRotation_;
-
-    std::vector<int> particleRow_;
-    std::vector<int> particleCol_;
-    std::vector<int> particleTheta_;
-    int numberOfParticles_;
     grid_map::Position correct_position_;
     std::default_random_engine generator_;
+
+    std::vector<int> particleRowSAD_;
+    std::vector<int> particleColSAD_;
+    std::vector<int> particleThetaSAD_;
+
+    std::vector<int> particleRowSSD_;
+    std::vector<int> particleColSSD_;
+    std::vector<int> particleThetaSSD_;
+
+    std::vector<int> particleRowNCC_;
+    std::vector<int> particleColNCC_;
+    std::vector<int> particleThetaNCC_;
+
+    std::vector<int> particleRowMI_;
+    std::vector<int> particleColMI_;
+    std::vector<int> particleThetaMI_;
+
 
     ros::Duration duration1_;
     ros::Duration duration2_;
