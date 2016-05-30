@@ -114,6 +114,10 @@ private:
 
     bool isFirst_;
 
+    std::string set_;
+
+    bool weighted_;
+
     //! ROS subscriber to the grid map.
     ros::Subscriber mapSubscriber_;
 

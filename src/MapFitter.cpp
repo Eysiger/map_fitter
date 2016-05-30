@@ -36,9 +36,11 @@ MapFitter::~MapFitter()
 
 bool MapFitter::readParameters()
 {
+  set_ = "set2";
+  weighted_ = true;
   nodeHandle_.param("map_topic", mapTopic_, std::string("/elevation_mapping_long_range/elevation_map"));
-  //nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/uav_elevation_mapping/uav_elevation_map"));
-  nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/elevation_mapping/elevation_map"));
+  if (set_ == "set1") { nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/uav_elevation_mapping/uav_elevation_map")); }
+  if (set_ == "set2") { nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/elevation_mapping/elevation_map")); }
   nodeHandle_.param("shifted_map_topic", shiftedMapTopic_, std::string("/elevation_mapping_long_range/shifted_map"));
   nodeHandle_.param("correlation_map_topic", correlationMapTopic_, std::string("/correlation_best_rotation/correlation_map"));
 
@@ -79,15 +81,18 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
             message.info.header.stamp.toSec());
   grid_map::GridMapRosConverter::fromMessage(message, map_);
 
-  //grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
-  //referenceMap_.move(grid_map::Position(2.75,1));
+  if (set_ == "set1") 
+  { 
+    grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
+    referenceMap_.move(grid_map::Position(2.75,1));
 
-  //grid_map::GridMap extendMap;
-  //extendMap.setGeometry(grid_map::Length(10.5,7.5), referenceMap_.getResolution(), referenceMap_.getPosition());
-  //extendMap.setFrameId("grid_map");
-  //referenceMap_.extendToInclude(extendMap);
+    //grid_map::GridMap extendMap;
+    //extendMap.setGeometry(grid_map::Length(10.5,7.5), referenceMap_.getResolution(), referenceMap_.getPosition());
+    //extendMap.setFrameId("grid_map");
+    //referenceMap_.extendToInclude(extendMap);
+  }
   
-  grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_);
+  if (set_ == "set2") { grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_); }
 
   exhaustiveSearch();
 }
@@ -206,17 +211,24 @@ void MapFitter::exhaustiveSearch()
     ros::Time time2 = ros::Time::now();
     if (success) 
     {
-      
-      float errSAD = errorSAD();
-      float errSSD = errorSSD();
-      float corrNCC = correlationNCC();
-      //float mutInfo = mutualInformation();
+      float errSAD;
+      float errSSD;
+      float corrNCC;
 
-      //float errSAD = weightedErrorSAD();
-      //float errSSD = weightedErrorSSD();
-      //float corrNCC = weightedCorrelationNCC();
-      //float mutInfo = weightedMutualInformation();
-
+      if (!weighted_) 
+      {
+        errSAD = errorSAD();
+        errSSD = errorSSD();
+        corrNCC = correlationNCC();
+        //float mutInfo = mutualInformation();
+      }
+      else
+      {
+        errSAD = weightedErrorSAD();
+        errSSD = weightedErrorSSD();
+        corrNCC = weightedCorrelationNCC();
+        //float mutInfo = weightedMutualInformation();
+      }
 
       SAD.push_back(errSAD);
       SSD.push_back(errSSD);
