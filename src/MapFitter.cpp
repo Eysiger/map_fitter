@@ -18,7 +18,7 @@ MapFitter::MapFitter(ros::NodeHandle& nodeHandle)
   readParameters();
   shiftedPublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>(shiftedMapTopic_,1);   // publisher for shifted_map
   correlationPublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>(correlationMapTopic_,1);    // publisher for correlation_map
-  referencePublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>(referenceMapTopic_,1);
+  referencePublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>("/uav_elevation_mapping/uav_elevation_map",1); // change back to referenceMapTopic_
   activityCheckTimer_ = nodeHandle_.createTimer(activityCheckDuration_,
                                                 &MapFitter::updateSubscriptionCallback,
                                                 this);
@@ -37,8 +37,8 @@ MapFitter::~MapFitter()
 bool MapFitter::readParameters()
 {
   nodeHandle_.param("map_topic", mapTopic_, std::string("/elevation_mapping_long_range/elevation_map"));
-  nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/uav_elevation_mapping/uav_elevation_map"));
-  //nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/elevation_mapping/elevation_map"));
+  //nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/uav_elevation_mapping/uav_elevation_map"));
+  nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/elevation_mapping/elevation_map"));
   nodeHandle_.param("shifted_map_topic", shiftedMapTopic_, std::string("/elevation_mapping_long_range/shifted_map"));
   nodeHandle_.param("correlation_map_topic", correlationMapTopic_, std::string("/correlation_best_rotation/correlation_map"));
 
@@ -79,14 +79,15 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
             message.info.header.stamp.toSec());
   grid_map::GridMapRosConverter::fromMessage(message, map_);
 
-  grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
-  referenceMap_.move(grid_map::Position(2.75,1));
+  //grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
+  //referenceMap_.move(grid_map::Position(2.75,1));
+
   //grid_map::GridMap extendMap;
   //extendMap.setGeometry(grid_map::Length(10.5,7.5), referenceMap_.getResolution(), referenceMap_.getPosition());
   //extendMap.setFrameId("grid_map");
   //referenceMap_.extendToInclude(extendMap);
   
-  //grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_);
+  grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_);
 
   exhaustiveSearch();
 }
@@ -132,7 +133,7 @@ void MapFitter::exhaustiveSearch()
   duration2_.sec = 0;
   duration2_.nsec = 0;
 
-  std::normal_distribution<float> distribution(0.0,2.0);
+  std::normal_distribution<float> distribution(0.0,3.0);
 
   grid_map::Matrix& reference_data = referenceMap_["elevation"];
   grid_map::Matrix& data = map_["elevation"];
@@ -144,7 +145,7 @@ void MapFitter::exhaustiveSearch()
   //std::cout << reference_start_index.transpose() << " reference_size: "<< reference_size.transpose() << "submap" << submap_start_index.transpose() << " size " << submap_size.transpose() << std::endl;
 
 
-  for (grid_map::GridMapIterator iterator(referenceMap_); !iterator.isPastEnd(); ++iterator) 
+  /*for (grid_map::GridMapIterator iterator(referenceMap_); !iterator.isPastEnd(); ++iterator) 
   {
     grid_map::Index index(*iterator);
     grid_map::Index shaped_index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
@@ -154,7 +155,7 @@ void MapFitter::exhaustiveSearch()
     {
       referenceMap_.at("elevation", index) = -0.75;
     }
-  }
+  }*/
   grid_map_msgs::GridMap reference_msg;
   grid_map::GridMapRosConverter::toMessage(referenceMap_, reference_msg);
   referencePublisher_.publish(reference_msg);
@@ -163,7 +164,7 @@ void MapFitter::exhaustiveSearch()
   if (isFirst_)
   {
     numberOfParticles_ = 0;
-    for (float theta = 0; theta < 360; theta+=angleIncrement_)
+    for (float theta = 0; theta < 360; theta += angleIncrement_)
     {
       for (grid_map::SubmapIteratorSparse iterator(referenceMap_, submap_start_index, submap_size, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
       //for (grid_map::GridMapIteratorSparse iterator(referenceMap_, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
@@ -182,11 +183,11 @@ void MapFitter::exhaustiveSearch()
   }
   else
   {
-    std::transform(particleRow_.begin(), particleRow_.end(), particleRow_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows ) ));
-    std::transform(particleRow_.begin(), particleRow_.end(), particleRow_.begin(), std::bind2nd(std::modulus<int>(), rows));
+    //std::transform(particleRow_.begin(), particleRow_.end(), particleRow_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows ) ));
+    //std::transform(particleRow_.begin(), particleRow_.end(), particleRow_.begin(), std::bind2nd(std::modulus<int>(), rows));
 
-    std::transform(particleCol_.begin(), particleCol_.end(), particleCol_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols ) ));
-    std::transform(particleCol_.begin(), particleCol_.end(), particleCol_.begin(), std::bind2nd(std::modulus<int>(), cols));
+    //std::transform(particleCol_.begin(), particleCol_.end(), particleCol_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols ) ));
+    //std::transform(particleCol_.begin(), particleCol_.end(), particleCol_.begin(), std::bind2nd(std::modulus<int>(), cols));
 
     templateRotation_ = fmod(templateRotation_ + distribution(generator_)/2 + 360, 360);
   }
@@ -211,8 +212,8 @@ void MapFitter::exhaustiveSearch()
       float corrNCC = correlationNCC();
       //float mutInfo = mutualInformation();
 
-      //float errSAD = weightedErrorSAD();
-      //float errSSD = weightedErrorSSD();
+      //float errSAD = weightedErrorSAD();
+      //float errSSD = weightedErrorSSD();
       //float corrNCC = weightedCorrelationNCC();
       //float mutInfo = weightedMutualInformation();
 
@@ -315,7 +316,7 @@ void MapFitter::exhaustiveSearch()
 
 
   // Calculate z alignement
-  float z = findZ(bestXNCC, bestYNCC, bestThetaNCC);
+  float z = findZ(data, reference_data, bestXNCC, bestYNCC, bestThetaNCC);
 
   ros::Time pubTime = ros::Time::now();
   // output best correlation and time used
@@ -384,82 +385,119 @@ void MapFitter::exhaustiveSearch()
   beta.clear();
   for (int i = 0; i < numberOfParticles_; i++)
   {
-      if (NCC[i] >= 0.6*bestNCC) { beta.push_back(NCC[i]); }   //threshold for acceptance?
+      if (NCC[i] >= 0.75*bestNCC) { beta.push_back(NCC[i]); }   //threshold for acceptance?
       else { beta.push_back(0.0); }
   }
   float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-  std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
-  std::partial_sum(beta.begin(), beta.end(), beta.begin());
-
-  std::vector< std::vector<int> > newParticles;
-  newParticles.clear();
-
-  if (numberOfParticles_ < 4000) { numberOfParticles_ = 4000; }
-  for (int i = 0; i < numberOfParticles_; i++)
+  if (sum == 0.0 && bestNCC != -1)                            // fix for second dataset with empty template update
   {
-    float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
-    int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
-
-    std::vector<int> particle;
-    particle.clear();
-
-    particle.push_back( int(particleRow_[ind] + round(distribution(generator_)) + rows) % rows );
-    particle.push_back( int(particleCol_[ind] + round(distribution(generator_)) + cols) % cols );
-    particle.push_back( int( particleTheta_[ind] + round(distribution(generator_)) + 360) % 360);
-    newParticles.push_back(particle);
+    particleRow_.clear();
+    particleCol_.clear();
+    particleTheta_.clear();
+    isFirst_ = true;
+    ROS_INFO("particle Filter reinitialized");
   }
-  
-  std::sort(newParticles.begin(), newParticles.end());
-  auto last = std::unique(newParticles.begin(), newParticles.end());
-  newParticles.erase(last, newParticles.end());
-
-  numberOfParticles_ = newParticles.size();
-  particleRow_.clear();
-  particleCol_.clear();
-  particleTheta_.clear();
-
-  for (int i = 0; i < numberOfParticles_; i++)
+  else if(sum != 0.0)
   {
-    particleRow_.push_back(newParticles[i][0]);
-    particleCol_.push_back(newParticles[i][1]);
-    particleTheta_.push_back(newParticles[i][2]);
+    std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
+    std::partial_sum(beta.begin(), beta.end(), beta.begin());
+
+    std::vector< std::vector<int> > newParticles;
+    newParticles.clear();
+
+    if (numberOfParticles_ < 4000) { numberOfParticles_ = 4000; }
+    for (int i = 0; i < numberOfParticles_; i++)
+    {
+      float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
+      int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
+
+      std::vector<int> particle;
+      particle.clear();
+
+      particle.push_back( int(particleRow_[ind] + round(distribution(generator_)) + rows) % rows );
+      particle.push_back( int(particleCol_[ind] + round(distribution(generator_)) + cols) % cols );
+      particle.push_back( int( particleTheta_[ind] + round(distribution(generator_)) + 360) % 360);
+      newParticles.push_back(particle);
+    }
+    
+    std::sort(newParticles.begin(), newParticles.end());
+    auto last = std::unique(newParticles.begin(), newParticles.end());
+    newParticles.erase(last, newParticles.end());
+
+    numberOfParticles_ = newParticles.size();
+    particleRow_.clear();
+    particleCol_.clear();
+    particleTheta_.clear();
+
+    for (int i = 0; i < numberOfParticles_; i++)
+    {
+      particleRow_.push_back(newParticles[i][0]);
+      particleCol_.push_back(newParticles[i][1]);
+      particleTheta_.push_back(newParticles[i][2]);
+    }
   }
+
 
   std::cout <<"New number of particles: " << numberOfParticles_ << std::endl;
   ROS_INFO("done");
   isActive_ = false;
 }
 
-float MapFitter::findZ(float x, float y, int theta)
+float MapFitter::findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data, float x, float y, int theta)
 {
+  grid_map::Index reference_index;
+  referenceMap_.getIndex(grid_map::Position(x,y), reference_index);
+  float sin_theta = sin((theta+templateRotation_)/180*M_PI);
+  float cos_theta = cos((theta+templateRotation_)/180*M_PI);
+
   // initialize
   float shifted_mean = 0;
   float reference_mean = 0;
   int matches = 0;
 
-  grid_map::Matrix& data = map_["elevation"];
-  for (grid_map::GridMapIteratorSparse iterator(map_, correlationIncrement_); !iterator.isPastEnd(); ++iterator) {
-    const grid_map::Index index(*iterator);
-    float shifted = data(index(0), index(1));
-    if (shifted == shifted) {   // check if point is defined, if nan f!= f 
-      grid_map::Position xy_position;
-      map_.getPosition(index, xy_position);  // get coordinates
-      tf::Vector3 xy_vector = tf::Vector3(xy_position(0), xy_position(1), 0.0);
+  Eigen::Array2i size = map_.getSize();
+  int size_x = size(0);
+  int size_y = size(1);
+  Eigen::Array2i start_index = map_.getStartIndex();
+  int start_index_x = start_index(0);
+  int start_index_y = start_index(1);
+  Eigen::Array2i reference_size = referenceMap_.getSize();
+  int reference_size_x = reference_size(0);
+  int reference_size_y = reference_size(1);
+  Eigen::Array2i reference_start_index = referenceMap_.getStartIndex();
+  int reference_start_index_x = reference_start_index(0);
+  int reference_start_index_y = reference_start_index(1);
+  int reference_index_x = reference_index(0);
+  int reference_index_y = reference_index(1);
 
-      // transform coordinates from /map_rotated to /grid_map
-      tf::Transform transform = tf::Transform(tf::Quaternion(0.0, 0.0, sin(theta/180*M_PI/2), cos(theta/180*M_PI/2)), tf::Vector3(x, y, 0.0));
-      tf::Vector3 map_vector = transform*(xy_vector); // apply transformation
-      grid_map::Position map_position;
-      map_position(0) = map_vector.getX();
-      map_position(1) = map_vector.getY();
+  for (int i = 0; i < size_x; i ++)
+  {
+    for (int j = 0; j< size_y; j ++)
+    {
+      int index_x = (start_index_x + i) % size_x;
+      int index_y = (start_index_y + j) % size_y;
 
-      // check if point is within reference_map
-      if (referenceMap_.isInside(map_position)) {
-        float reference = referenceMap_.atPosition("elevation", map_position);
-        if (reference == reference) {   // check if point is defined, if nan f!= f 
-          matches += 1;
-          shifted_mean += shifted;
-          reference_mean += reference;
+      float mapHeight = data(index_x, index_y);
+      if (mapHeight == mapHeight)
+      {
+        int reference_buffer_index_x = reference_size_x - reference_start_index_x + reference_index_x;
+        int reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
+
+        int shifted_index_x = reference_buffer_index_x % reference_size_x - round(cos_theta*(float(size_x)/2-i) - sin_theta*(float(size_y)/2-j));
+        int shifted_index_y = reference_buffer_index_y % reference_size_y - round(sin_theta*(float(size_x)/2-i) + cos_theta*(float(size_y)/2-j));
+              
+        if (shifted_index_x >= 0 && shifted_index_x < reference_size_x && shifted_index_y >= 0 && shifted_index_y < reference_size_y )
+        {
+          shifted_index_x = (shifted_index_x + reference_start_index_x) % reference_size_x;
+          shifted_index_y = (shifted_index_y + reference_start_index_y) % reference_size_y;
+          float referenceHeight = reference_data(shifted_index_x, shifted_index_y);
+          //std::cout << referenceHeight << " " << shifted_index_x <<", " << shifted_index_y << std::endl;
+          if (referenceHeight == referenceHeight)
+          {
+            matches += 1;
+            shifted_mean += mapHeight;
+            reference_mean += referenceHeight;
+          }
         }
       }
     }
@@ -515,7 +553,7 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
         int reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
 
         int shifted_index_x = reference_buffer_index_x % reference_size_x - round(cos_theta*(float(size_x)/2-i) - sin_theta*(float(size_y)/2-j));
-        int shifted_index_y = reference_buffer_index_y % reference_size_y - sin_theta*(float(size_x)/2-i) - cos_theta*(float(size_y)/2-j);
+        int shifted_index_y = reference_buffer_index_y % reference_size_y - round(sin_theta*(float(size_x)/2-i) + cos_theta*(float(size_y)/2-j));
               
         if (shifted_index_x >= 0 && shifted_index_x < reference_size_x && shifted_index_y >= 0 && shifted_index_y < reference_size_y )
         {
