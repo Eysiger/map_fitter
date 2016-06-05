@@ -5,7 +5,7 @@ activity_check_rate: 1.0
 shifted_map_topic: /elevation_mapping_long_range/shifted_map
 correlation_map_topic: /correlation_best_rotation/correlation_map
 
-angle_increment: 10
+angle_increment: 5
 position_increment_search: 5
 position_increment_correlation: 5
 required_overlap: 0.75

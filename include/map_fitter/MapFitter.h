@@ -17,11 +17,9 @@
 #include <tf/transform_broadcaster.h>
 #include <grid_map_core/GridMap.hpp>
 #include <grid_map_core/iterators/GridMapIterator.hpp>
-#include <grid_map_core/iterators/GridMapIteratorSparse.hpp>
 #include <grid_map_core/iterators/SubmapIteratorSparse.hpp>
 #include <grid_map_ros/GridMapRosConverter.hpp>
 #include <grid_map_msgs/GridMap.h>
-#include <Eigen/Core>
 #include <geometry_msgs/PointStamped.h>
 
 
@@ -70,6 +68,8 @@ private:
      * @return true if successful.
      */
     bool readParameters();
+
+    bool initialization();
 
     /*!
      * Check if visualizations are active (subscribed to),
@@ -121,6 +121,8 @@ private:
     bool MI_;
 
     bool weighted_;
+
+    bool resample_;
 
     //! ROS subscriber to the grid map.
     ros::Subscriber mapSubscriber_;
