@@ -24,10 +24,6 @@
 #include <Eigen/Core>
 #include <geometry_msgs/PointStamped.h>
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <cv_bridge/cv_bridge.h>
 
 namespace map_fitter {
 

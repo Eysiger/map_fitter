@@ -1111,69 +1111,6 @@ float MapFitter::weightedMutualInformation()
 
   duration1_ += ros::Time::now() - time1;
 
-  /*std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
-
-  ros::Time time2 = ros::Time::now();
-
-  cv::Mat cvhist( numberOfBins, 1, cv::DataType<float>::type, 0.0);
-  cv::Mat cvreferenceHist( numberOfBins, 1, cv::DataType<float>::type, 0.0);
-  cv::Mat cvjointHist( numberOfBins, numberOfBins, cv::DataType<float>::type, 0.0);
-  cv::Mat cvweightedHist(numberOfBins, numberOfBins, cv::DataType<float>::type, 0.0);
-
-  for (int k=0; k < numberOfBins; k++)
-  {
-    cvhist.at<float>(k, 0) = hist[k];
-    cvreferenceHist.at<float>(k, 0) = referenceHist[k];
-    for (int j=0; j < numberOfBins; j++)
-    {
-      cvjointHist.at<float>(k, j) = jointHist[k][j];
-      cvweightedHist.at<float>(k, j) = float(abs(k-j)+1)/12;
-    }
-  }
-
-  cv::Mat logP;
-  cv::log(cvhist,logP);
-  entropy = -1*cv::sum(cvhist.mul(logP)).val[0];
-
-  cv::log(cvreferenceHist,logP);
-  referenceEntropy = -1*cv::sum(cvreferenceHist.mul(logP)).val[0];
-
-  cv::Mat jointLogP;
-  cv::log(cvjointHist,jointLogP);
-
-  cvjointHist = cvweightedHist.mul(cvjointHist);
-
-  jointEntropy = -1*cv::sum(cvjointHist.mul(jointLogP)).val[0];
-
-  duration2_ += ros::Time::now() - time2;*/
-
-  //Visualization
-  /*cvjointHist = cvjointHist * 255;
-
-  cv::Mat histImage( numberOfBins, numberOfBins, cv::DataType<float>::type, 0.0);
-  cv::Mat histImage2( numberOfBins, numberOfBins, cv::DataType<float>::type, 0.0);
-
-  cv::normalize(cvhist, cvhist, 0, histImage.rows-1, cv::NORM_MINMAX, -1, cv::Mat() );
-  cv::normalize(cvreferenceHist, cvreferenceHist, 0, histImage2.rows-1, cv::NORM_MINMAX, -1, cv::Mat() );
-
-  for( int i = 1; i < numberOfBins; i++ )
-  {
-    cv::line( histImage, cv::Point( (i-1), numberOfBins-1 - cvRound(cvhist.at<float>(i-1)) ) ,
-                     cv::Point(i, numberOfBins-1 - cvRound(cvhist.at<float>(i)) ),
-                     cv::Scalar( 255, 0, 0), 1, 8, 0  );
-    cv::line( histImage2, cv::Point( (i-1), numberOfBins-1 - cvRound(cvreferenceHist.at<float>(i-1)) ) ,
-                     cv::Point( i, numberOfBins-1 - cvRound(cvreferenceHist.at<float>(i)) ),
-                     cv::Scalar( 255, 0, 0), 1, 8, 0  );
-  }
-  std::vector<cv::Mat> channels; 
-  channels.push_back(histImage);
-  channels.push_back(histImage2);
-  channels.push_back(cvjointHist);
-  cv::merge(channels, histImage);
-  cv::namedWindow("calcHist", CV_WINDOW_AUTOSIZE );
-  cv::imshow("calcHist", histImage );
-  cv::waitKey(0);*/
-
   //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
   return (entropy+referenceEntropy-jointEntropy); //-jointEntropy; //
 }
