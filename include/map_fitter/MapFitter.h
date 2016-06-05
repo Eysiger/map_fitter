@@ -24,6 +24,11 @@
 #include <Eigen/Core>
 #include <geometry_msgs/PointStamped.h>
 
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <cv_bridge/cv_bridge.h>
+
 namespace map_fitter {
 
 class MapFitter
@@ -49,24 +54,19 @@ public:
     void exhaustiveSearch();
 
     float findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data, float x, float y, int theta);
-
     bool findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float sin_theta, float cos_theta);
 
-    float mutualInformation();
-
-    float weightedMutualInformation();   
-
     float errorSAD();
-
     float weightedErrorSAD();
 
     float errorSSD();
-
     float weightedErrorSSD();
 
     float correlationNCC();
-
     float weightedCorrelationNCC();
+
+    float mutualInformation();
+    float weightedMutualInformation();   
 
 private:
     /*!
@@ -112,7 +112,11 @@ private:
     //! If the grid map visualization is subscribed to the grid map.
     bool isActive_;
 
-    bool isFirst_;
+    bool initializeSAD_;
+    bool initializeSSD_;
+    bool initializeNCC_;
+    bool initializeMI_;
+
 
     std::string set_;
     bool SAD_; 

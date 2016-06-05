@@ -12,7 +12,7 @@
 namespace map_fitter {
 
 MapFitter::MapFitter(ros::NodeHandle& nodeHandle)
-    : nodeHandle_(nodeHandle), isActive_(false), isFirst_(true)
+    : nodeHandle_(nodeHandle), isActive_(false), initializeSAD_(false), initializeSSD_(false), initializeNCC_(false), initializeMI_(false)
 {
   ROS_INFO("Map fitter node started, ready to match some grid maps.");
   readParameters();
@@ -37,11 +37,15 @@ MapFitter::~MapFitter()
 bool MapFitter::readParameters()
 {
   set_ = "set1";
-  SAD_ = true; //"SAD", 
-  SSD_ = true;
-  NCC_ = true;
-  MI_ = false;
   weighted_ = true;
+  SAD_ = true;
+  if (SAD_ == true) { initializeSAD_ = true; }
+  SSD_ = true;
+  if (SSD_ == true) { initializeSSD_ = true; }
+  NCC_ = true;
+  if (NCC_ == true) { initializeNCC_ = true; }
+  MI_ = true;
+  if (MI_ == true) { initializeMI_ = true; }
 
   nodeHandle_.param("map_topic", mapTopic_, std::string("/elevation_mapping_long_range/elevation_map"));
   if (set_ == "set1") { nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/uav_elevation_mapping/uav_elevation_map")); }
@@ -130,18 +134,21 @@ void MapFitter::exhaustiveSearch()
   grid_map::Size submap_size;
   referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
   //std::cout << reference_start_index.transpose() << " reference_size: "<< reference_size.transpose() << "submap" << submap_start_index.transpose() << " size " << submap_size.transpose() << std::endl;
-
-  /*for (grid_map::GridMapIterator iterator(referenceMap_); !iterator.isPastEnd(); ++iterator) 
-  {
-    grid_map::Index index(*iterator);
-    grid_map::Index shaped_index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
-    grid_map::Index shaped_submap_start_index = grid_map::getIndexFromBufferIndex(submap_start_index, reference_size, reference_start_index);
-    bool outside_submap = (shaped_index(0) < shaped_submap_start_index(0) || shaped_index(1) < shaped_submap_start_index(1) || shaped_index(0) > shaped_submap_start_index(0)+submap_size(0) || shaped_index(1) > shaped_submap_start_index(1)+submap_size(1));
-    if ( outside_submap )
+  /*if (set_ == "set1") 
+  { 
+    for (grid_map::GridMapIterator iterator(referenceMap_); !iterator.isPastEnd(); ++iterator) 
     {
-      referenceMap_.at("elevation", index) = -0.75;
+      grid_map::Index index(*iterator);
+      grid_map::Index shaped_index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
+      grid_map::Index shaped_submap_start_index = grid_map::getIndexFromBufferIndex(submap_start_index, reference_size, reference_start_index);
+      bool outside_submap = (shaped_index(0) < shaped_submap_start_index(0) || shaped_index(1) < shaped_submap_start_index(1) || shaped_index(0) > shaped_submap_start_index(0)+submap_size(0) || shaped_index(1) > shaped_submap_start_index(1)+submap_size(1));
+      if ( outside_submap )
+      {
+        referenceMap_.at("elevation", index) = -0.75;
+      }
     }
   }*/
+
   grid_map_msgs::GridMap reference_msg;
   grid_map::GridMapRosConverter::toMessage(referenceMap_, reference_msg);
   referencePublisher_.publish(reference_msg);
@@ -155,7 +162,7 @@ void MapFitter::exhaustiveSearch()
   std::normal_distribution<float> distribution(0.0,3.0);
 
   // initialize particles
-  if (isFirst_)
+  if (initializeSAD_ || initializeSSD_ || initializeNCC_ || initializeMI_)
   {
     int numberOfParticles = 0;
     for (float theta = 0; theta < 360; theta += angleIncrement_)
@@ -163,25 +170,27 @@ void MapFitter::exhaustiveSearch()
       for (grid_map::SubmapIteratorSparse iterator(referenceMap_, submap_start_index, submap_size, searchIncrement_); !iterator.isPastEnd(); ++iterator) 
       {
         grid_map::Index index(*iterator);
-        if (SAD_)
+      //grid_map::Index index;
+      //referenceMap_.getIndex(correct_position_, index);
+        if (initializeSAD_)
         {
           particleRowSAD_.push_back(index(0));
           particleColSAD_.push_back(index(1));
           particleThetaSAD_.push_back(theta);
         }
-        if (SSD_)
+        if (initializeSSD_)
         {
           particleRowSSD_.push_back(index(0));
           particleColSSD_.push_back(index(1));
           particleThetaSSD_.push_back(theta);
         }
-        if (NCC_)
+        if (initializeNCC_)
         {
           particleRowNCC_.push_back(index(0));
           particleColNCC_.push_back(index(1));
           particleThetaNCC_.push_back(theta);
         }
-        if (MI_)
+        if (initializeMI_)
         {
           particleRowMI_.push_back(index(0));
           particleColMI_.push_back(index(1));
@@ -192,8 +201,15 @@ void MapFitter::exhaustiveSearch()
     }
     templateRotation_ = static_cast <float> (rand() / static_cast <float> (RAND_MAX/360)); //rand() %360;
 
-    std::cout <<"Number of particles: " << numberOfParticles << std::endl;
-    isFirst_ = false;
+    if (initializeSAD_) { std::cout <<"Number of particles SAD: " << numberOfParticles << std::endl; }
+    if (initializeSSD_) { std::cout <<"Number of particles SSD: " << numberOfParticles << std::endl; }
+    if (initializeNCC_) { std::cout <<"Number of particles NCC: " << numberOfParticles << std::endl; }
+    if (initializeMI_) { std::cout <<"Number of particles MI: " << numberOfParticles << std::endl; }
+
+    initializeSAD_ = false;
+    initializeSSD_ = false;
+    initializeNCC_ = false;
+    initializeMI_ = false;
   }
   else
   {
@@ -245,7 +261,6 @@ void MapFitter::exhaustiveSearch()
       float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
       bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
-      ros::Time time2 = ros::Time::now();
       if (success) 
       {
         float errSAD;
@@ -271,7 +286,6 @@ void MapFitter::exhaustiveSearch()
         }
       }
       else { SAD.push_back(10); }
-      duration2_ += ros::Time::now() - time2;
     }
       // search best score 
     grid_map::Position best_pos;
@@ -306,7 +320,7 @@ void MapFitter::exhaustiveSearch()
     beta.clear();
     for (int i = 0; i < particleRowSAD_.size(); i++)
     {
-        if (SAD[i] <= 1.25*bestSAD) { beta.push_back(SAD[i]); }   //threshold for acceptance?
+        if (SAD[i] <= 1.25*bestSAD) { beta.push_back(1.25*bestSAD-SAD[i]); }   //threshold for acceptance?
         else { beta.push_back(0.0); }
     }
     float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
@@ -315,8 +329,8 @@ void MapFitter::exhaustiveSearch()
       particleRowSAD_.clear();
       particleColSAD_.clear();
       particleThetaSAD_.clear();
-      isFirst_ = true;
-      ROS_INFO("particle Filter SAD (all) reinitialized");
+      initializeSAD_ = true;
+      ROS_INFO("particle Filter SAD reinitialized");
     }
     else if(sum != 0.0)
     {
@@ -376,7 +390,6 @@ void MapFitter::exhaustiveSearch()
       float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
       bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
-      ros::Time time2 = ros::Time::now();
       if (success) 
       {
         float errSSD;
@@ -394,15 +407,14 @@ void MapFitter::exhaustiveSearch()
 
           bool valid = correlationMap.isValid(correlation_index, "SSD");
           // if no value so far or correlation smaller or correlation higher than for other thetas
-          if (((valid == false) || (errSSD*1000 < correlationMap.at("SSD", correlation_index) ))) 
+          if (((valid == false) || (errSSD*1e11 < correlationMap.at("SSD", correlation_index) ))) 
           {
-            correlationMap.at("SSD", correlation_index) = errSSD*1000;  //set correlation
+            correlationMap.at("SSD", correlation_index) = errSSD*1e11;  //set correlation
             correlationMap.at("rotationSSD", correlation_index) = theta;    //set theta
           }
         }
       }
       else { SSD.push_back(10); }
-      duration2_ += ros::Time::now() - time2;
     }
       // search best score 
     grid_map::Position best_pos;
@@ -437,7 +449,7 @@ void MapFitter::exhaustiveSearch()
     beta.clear();
     for (int i = 0; i < particleRowSSD_.size(); i++)
     {
-        if (SSD[i] <= 1.50*bestSSD) { beta.push_back(SSD[i]); }   //threshold for acceptance?
+        if (SSD[i] <= 1.25*bestSSD) { beta.push_back(1.25*bestSSD-SSD[i]); }   //threshold for acceptance?
         else { beta.push_back(0.0); }
     }
     float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
@@ -446,8 +458,8 @@ void MapFitter::exhaustiveSearch()
       particleRowSSD_.clear();
       particleColSSD_.clear();
       particleThetaSSD_.clear();
-      isFirst_ = true;
-      ROS_INFO("particle Filter SSD (all) reinitialized");
+      initializeSSD_ = true;
+      ROS_INFO("particle Filter SSD reinitialized");
     }
     else if(sum != 0.0)
     {
@@ -507,7 +519,6 @@ void MapFitter::exhaustiveSearch()
       float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
       bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
-      ros::Time time2 = ros::Time::now();
       if (success) 
       {
         float corrNCC;
@@ -533,7 +544,6 @@ void MapFitter::exhaustiveSearch()
         }
       }
       else { NCC.push_back(-1); }
-      duration2_ += ros::Time::now() - time2;
     }
       // search best score 
     grid_map::Position best_pos;
@@ -577,8 +587,8 @@ void MapFitter::exhaustiveSearch()
       particleRowNCC_.clear();
       particleColNCC_.clear();
       particleThetaNCC_.clear();
-      isFirst_ = true;
-      ROS_INFO("particle Filter NCC (all) reinitialized");
+      initializeNCC_ = true;
+      ROS_INFO("particle Filter NCC reinitialized");
     }
     else if(sum != 0.0)
     {
@@ -642,7 +652,6 @@ void MapFitter::exhaustiveSearch()
       float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
       bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
-      ros::Time time2 = ros::Time::now();
       if (success) 
       {
         float mutInfo;
@@ -668,7 +677,6 @@ void MapFitter::exhaustiveSearch()
         }
       }
       else { MI.push_back(-10); }
-      duration2_ += ros::Time::now() - time2;
     }
       // search best score 
     grid_map::Position best_pos;
@@ -684,7 +692,7 @@ void MapFitter::exhaustiveSearch()
     // Calculate z alignement
     float z = findZ(data, reference_data, bestXMI, bestYMI, bestThetaMI);
     ros::Time pubTime = ros::Time::now();
-    if (bestMI != 0) 
+    if (bestMI != -10) 
     {
       cumulativeErrorMI_ += sqrt((bestXMI - correct_position_(0))*(bestXMI - correct_position_(0)) + (bestYMI - correct_position_(1))*(bestYMI - correct_position_(1)));
       if (sqrt((bestXMI - correct_position_(0))*(bestXMI - correct_position_(0)) + (bestYMI - correct_position_(1))*(bestYMI - correct_position_(1))) < 0.5 && fabs(bestThetaMI - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesMI_ += 1;}
@@ -703,7 +711,7 @@ void MapFitter::exhaustiveSearch()
     beta.clear();
     for (int i = 0; i < particleRowMI_.size(); i++)
     {
-        if (MI[i] >= 0.75*bestMI) { beta.push_back(MI[i]); }   //threshold for acceptance?
+        if (MI[i] >= 0.90*bestMI) { beta.push_back(MI[i]); }   //threshold for acceptance?
         else { beta.push_back(0.0); }
     }
     float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
@@ -712,8 +720,8 @@ void MapFitter::exhaustiveSearch()
       particleRowMI_.clear();
       particleColMI_.clear();
       particleThetaMI_.clear();
-      isFirst_ = true;
-      ROS_INFO("particle Filter MI (all) reinitialized");
+      initializeMI_ = true;
+      ROS_INFO("particle Filter MI reinitialized");
     }
     else if(sum != 0.0)
     {
@@ -844,7 +852,6 @@ float MapFitter::findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data,
 
 bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float sin_theta, float cos_theta)
 {
-  ros::Time time1 = ros::Time::now();
   // initialize
   int points = 0;
   matches_ = 0;
@@ -906,11 +913,9 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
           }
         }
       }
-      
     }
   }
 
- duration1_ += ros::Time::now() - time1;
   // check if required overlap is fulfilled
   if (matches_ > points*requiredOverlap_) 
   { 
@@ -919,94 +924,6 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
     return true; 
   }
   else { return false; }
-}
-
-float MapFitter::mutualInformation()
-{
-  const int numberOfBins = 256;
-
-  float minHeight = map_min_ - shifted_mean_;
-  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
-
-  float maxHeight = map_max_ - shifted_mean_;
-  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
-
-  float binWidth = (maxHeight - minHeight)/(numberOfBins - 1);
-  float hist[numberOfBins] = {0.0};
-  float referenceHist[numberOfBins] = {0.0};
-  float jointHist[numberOfBins][numberOfBins] = {0.0};
-
-  for (int i = 0; i < matches_; i++)
-  {
-    float i1 = xy_shifted_[i] - shifted_mean_;
-    float i2 = xy_reference_[i] - reference_mean_;
-    //std::cout << int((i1-minHeight) / binWidth) << " " << int((i2-minHeight) / binWidth) << std::endl;
-    hist[int((i1-minHeight) / binWidth)] += 1.0/matches_;
-    referenceHist[int((i2-minHeight) / binWidth)] += 1.0/matches_;
-    jointHist[int((i1-minHeight) / binWidth)][int((i2-minHeight) / binWidth)] += 1.0/matches_;
-  }
-  
-  float entropy = 0;
-  float referenceEntropy = 0;
-  float jointEntropy = 0;
-
-  for (int i = 0; i < numberOfBins; i++)
-  {
-    if (hist[i]!=0.0) {entropy += -hist[i]*log(hist[i]);}
-    if (referenceHist[i]!=0.0) {referenceEntropy += -referenceHist[i]*log(referenceHist[i]);}
-
-    for (int j = 0; j < numberOfBins; j++)
-    {
-      if (jointHist[i][j]!=0.0) {jointEntropy += -jointHist[i][j]*log(jointHist[i][j]);}
-    }
-  }
-
-  //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
-  return (entropy+referenceEntropy-jointEntropy);
-}
-
-float MapFitter::weightedMutualInformation()
-{
-  const int numberOfBins = 256;
-
-  float minHeight = map_min_ - shifted_mean_;
-  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
-
-  float maxHeight = map_max_ - shifted_mean_;
-  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
-
-  float binWidth = (maxHeight - minHeight)/(numberOfBins - 1);
-  float hist[numberOfBins] = {0.0};
-  float referenceHist[numberOfBins] = {0.0};
-  float jointHist[numberOfBins][numberOfBins] = {0.0};
-
-  for (int i = 0; i < matches_; i++)
-  {
-    float i1 = xy_shifted_[i] - shifted_mean_;
-    float i2 = xy_reference_[i] - reference_mean_;
-    //std::cout << int((i1-minHeight) / binWidth) << " " << int((i2-minHeight) / binWidth) << std::endl;
-    hist[int((i1-minHeight) / binWidth)] += 1.0/matches_;
-    referenceHist[int((i2-minHeight) / binWidth)] += 1.0/matches_;
-    jointHist[int((i1-minHeight) / binWidth)][int((i2-minHeight) / binWidth)] += 1.0/matches_;
-  }
-  
-  float entropy = 0;
-  float referenceEntropy = 0;
-  float jointEntropy = 0;
-
-  for (int i = 0; i < numberOfBins; i++)
-  {
-    if (hist[i]!=0.0) { entropy += -hist[i]*log(hist[i]); }
-    if (referenceHist[i]!=0.0) { referenceEntropy += -referenceHist[i]*log(referenceHist[i]); }
-
-    for (int j = 0; j < numberOfBins; j++)
-    {
-      if (jointHist[i][j]!=0.0) { jointEntropy += -float(abs(j-i)+1)/12*jointHist[i][j]*log(jointHist[i][j]); }
-    }
-  }
-
-  //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
-  return (entropy+referenceEntropy-jointEntropy);
 }
 
 float MapFitter::errorSAD()
@@ -1061,8 +978,10 @@ float MapFitter::weightedErrorSSD()
   {
     float shifted = (xy_shifted_[i]-shifted_mean_)/std::numeric_limits<unsigned short>::max();
     float reference = (xy_reference_[i]-reference_mean_)/std::numeric_limits<unsigned short>::max();
-    error += sqrt(fabs(shifted-reference)) * xy_shifted_var_[i]*xy_shifted_var_[i];// * xy_reference_var_[i]; //sqrt(fabs(shifted-reference)) instead of (shifted-reference)*(shifted-reference), since values are in between 0 and 1
-    normalization += xy_shifted_var_[i]*xy_shifted_var_[i];// * (xy_reference_var_[i]
+    //error += sqrt(fabs(shifted-reference) * xy_shifted_var_[i]) ; // * xy_reference_var_[i]; since values are in between 0 and 1
+    //normalization += sqrt(xy_shifted_var_[i]); //  * (xy_reference_var_[i]
+    error += (shifted-reference)*(shifted-reference)* xy_shifted_var_[i]*xy_shifted_var_[i] ; // * xy_reference_var_[i]; 
+    normalization += xy_shifted_var_[i]*xy_shifted_var_[i]; // * (xy_reference_var_[i]
   }
   // divide error by number of matches
   //std::cout << error/normalization <<std::endl;
@@ -1101,6 +1020,162 @@ float MapFitter::weightedCorrelationNCC()
     reference_normal += xy_shifted_var_[i]*reference_corr*reference_corr;// reference_corr*reference_corr * xy_shifted_var_[i];
   }
   return correlation/sqrt(shifted_normal*reference_normal);
+}
+
+float MapFitter::mutualInformation()
+{
+  const int numberOfBins = 256;
+
+  float minHeight = map_min_ - shifted_mean_;
+  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
+
+  float maxHeight = map_max_ - shifted_mean_;
+  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
+
+  float binWidth = (maxHeight - minHeight)/(numberOfBins - 1);
+  float hist[numberOfBins] = {0.0};
+  float referenceHist[numberOfBins] = {0.0};
+  float jointHist[numberOfBins][numberOfBins] = {0.0};
+
+  for (int i = 0; i < matches_; i++)
+  {
+    int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
+    int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
+        //std::cout << i1<< " " << i2 << std::endl;
+    hist[i1] += 1.0/matches_;
+    referenceHist[i2] += 1.0/matches_;
+    jointHist[i1][i2] += 1.0/matches_;
+  }
+  
+  float entropy = 0;
+  float referenceEntropy = 0;
+  float jointEntropy = 0;
+
+  for (int i = 0; i < numberOfBins; i++)
+  {
+    if (hist[i]!=0.0) {entropy += -hist[i]*log(hist[i]);}
+    if (referenceHist[i]!=0.0) {referenceEntropy += -referenceHist[i]*log(referenceHist[i]);}
+
+    for (int j = 0; j < numberOfBins; j++)
+    {
+      if (jointHist[i][j]!=0.0) {jointEntropy += -jointHist[i][j]*log(jointHist[i][j]);}
+    }
+  }
+
+  //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
+  return (entropy+referenceEntropy-jointEntropy);
+}
+
+float MapFitter::weightedMutualInformation()
+{
+  ros::Time time1 = ros::Time::now();
+
+  const int numberOfBins = 128;
+
+  float minHeight = map_min_ - shifted_mean_;
+  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
+
+  float maxHeight = map_max_ - shifted_mean_;
+  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
+
+  float binWidth = (maxHeight - minHeight)/(numberOfBins - 1);
+  float hist[numberOfBins] = {0.0};
+  float referenceHist[numberOfBins] = {0.0};
+  float jointHist[numberOfBins][numberOfBins] = {0.0};
+
+  for (int i = 0; i < matches_; i++)
+  {
+
+    int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
+    int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
+    //std::cout << i1<< " " << i2 << std::endl;
+    hist[i1] += 1.0/matches_;
+    referenceHist[i2] += 1.0/matches_;
+    jointHist[i1][i2] += 1.0/matches_;
+  }
+
+  float entropy = 0;
+  float referenceEntropy = 0;
+  float jointEntropy = 0;
+
+  for (int i = 0; i < numberOfBins; i++)
+  {
+    if (hist[i]!=0.0) { entropy += -hist[i]*log(hist[i]); }
+    if (referenceHist[i]!=0.0) { referenceEntropy += -referenceHist[i]*log(referenceHist[i]); }
+
+    for (int j = 0; j < numberOfBins; j++)
+    {
+      if (jointHist[i][j]!=0.0) { jointEntropy += -float(abs(i-j)+1)/12*jointHist[i][j]*log(jointHist[i][j]); }
+    }
+  }
+
+  duration1_ += ros::Time::now() - time1;
+
+  /*std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
+
+  ros::Time time2 = ros::Time::now();
+
+  cv::Mat cvhist( numberOfBins, 1, cv::DataType<float>::type, 0.0);
+  cv::Mat cvreferenceHist( numberOfBins, 1, cv::DataType<float>::type, 0.0);
+  cv::Mat cvjointHist( numberOfBins, numberOfBins, cv::DataType<float>::type, 0.0);
+  cv::Mat cvweightedHist(numberOfBins, numberOfBins, cv::DataType<float>::type, 0.0);
+
+  for (int k=0; k < numberOfBins; k++)
+  {
+    cvhist.at<float>(k, 0) = hist[k];
+    cvreferenceHist.at<float>(k, 0) = referenceHist[k];
+    for (int j=0; j < numberOfBins; j++)
+    {
+      cvjointHist.at<float>(k, j) = jointHist[k][j];
+      cvweightedHist.at<float>(k, j) = float(abs(k-j)+1)/12;
+    }
+  }
+
+  cv::Mat logP;
+  cv::log(cvhist,logP);
+  entropy = -1*cv::sum(cvhist.mul(logP)).val[0];
+
+  cv::log(cvreferenceHist,logP);
+  referenceEntropy = -1*cv::sum(cvreferenceHist.mul(logP)).val[0];
+
+  cv::Mat jointLogP;
+  cv::log(cvjointHist,jointLogP);
+
+  cvjointHist = cvweightedHist.mul(cvjointHist);
+
+  jointEntropy = -1*cv::sum(cvjointHist.mul(jointLogP)).val[0];
+
+  duration2_ += ros::Time::now() - time2;*/
+
+  //Visualization
+  /*cvjointHist = cvjointHist * 255;
+
+  cv::Mat histImage( numberOfBins, numberOfBins, cv::DataType<float>::type, 0.0);
+  cv::Mat histImage2( numberOfBins, numberOfBins, cv::DataType<float>::type, 0.0);
+
+  cv::normalize(cvhist, cvhist, 0, histImage.rows-1, cv::NORM_MINMAX, -1, cv::Mat() );
+  cv::normalize(cvreferenceHist, cvreferenceHist, 0, histImage2.rows-1, cv::NORM_MINMAX, -1, cv::Mat() );
+
+  for( int i = 1; i < numberOfBins; i++ )
+  {
+    cv::line( histImage, cv::Point( (i-1), numberOfBins-1 - cvRound(cvhist.at<float>(i-1)) ) ,
+                     cv::Point(i, numberOfBins-1 - cvRound(cvhist.at<float>(i)) ),
+                     cv::Scalar( 255, 0, 0), 1, 8, 0  );
+    cv::line( histImage2, cv::Point( (i-1), numberOfBins-1 - cvRound(cvreferenceHist.at<float>(i-1)) ) ,
+                     cv::Point( i, numberOfBins-1 - cvRound(cvreferenceHist.at<float>(i)) ),
+                     cv::Scalar( 255, 0, 0), 1, 8, 0  );
+  }
+  std::vector<cv::Mat> channels; 
+  channels.push_back(histImage);
+  channels.push_back(histImage2);
+  channels.push_back(cvjointHist);
+  cv::merge(channels, histImage);
+  cv::namedWindow("calcHist", CV_WINDOW_AUTOSIZE );
+  cv::imshow("calcHist", histImage );
+  cv::waitKey(0);*/
+
+  //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
+  return (entropy+referenceEntropy-jointEntropy); //-jointEntropy; //
 }
 
 void MapFitter::tfBroadcast(const ros::TimerEvent&) 
