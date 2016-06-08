@@ -47,8 +47,8 @@ public:
 
     void exhaustiveSearch();
 
-    float findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data, float x, float y, int theta);
-    bool findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float sin_theta, float cos_theta);
+    float findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data, float x, float y, float theta);
+    bool findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, float row, float col, float sin_theta, float cos_theta);
 
     float errorSAD();
     float weightedErrorSAD();
@@ -108,12 +108,6 @@ private:
     //! If the grid map visualization is subscribed to the grid map.
     bool isActive_;
 
-    bool initializeSAD_;
-    bool initializeSSD_;
-    bool initializeNCC_;
-    bool initializeMI_;
-
-
     std::string set_;
     bool SAD_; 
     bool SSD_;
@@ -123,6 +117,12 @@ private:
     bool weighted_;
 
     bool resample_;
+
+    bool initializeSAD_;
+    bool initializeSSD_;
+    bool initializeNCC_;
+    bool initializeMI_;
+
 
     //! ROS subscriber to the grid map.
     ros::Subscriber mapSubscriber_;
@@ -200,21 +200,21 @@ private:
     grid_map::Position correct_position_;
     std::default_random_engine generator_;
 
-    std::vector<int> particleRowSAD_;
-    std::vector<int> particleColSAD_;
-    std::vector<int> particleThetaSAD_;
+    std::vector<float> particleRowSAD_;
+    std::vector<float> particleColSAD_;
+    std::vector<float> particleThetaSAD_;
 
-    std::vector<int> particleRowSSD_;
-    std::vector<int> particleColSSD_;
-    std::vector<int> particleThetaSSD_;
+    std::vector<float> particleRowSSD_;
+    std::vector<float> particleColSSD_;
+    std::vector<float> particleThetaSSD_;
 
-    std::vector<int> particleRowNCC_;
-    std::vector<int> particleColNCC_;
-    std::vector<int> particleThetaNCC_;
+    std::vector<float> particleRowNCC_;
+    std::vector<float> particleColNCC_;
+    std::vector<float> particleThetaNCC_;
 
-    std::vector<int> particleRowMI_;
-    std::vector<int> particleColMI_;
-    std::vector<int> particleThetaMI_;
+    std::vector<float> particleRowMI_;
+    std::vector<float> particleColMI_;
+    std::vector<float> particleThetaMI_;
 
 
     ros::Duration duration1_;

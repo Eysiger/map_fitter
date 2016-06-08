@@ -37,7 +37,7 @@ MapFitter::~MapFitter()
 
 bool MapFitter::readParameters()
 {
-  set_ = "set2";
+  set_ = "set1";
   weighted_ = true;
   resample_ = true;
 
@@ -167,7 +167,7 @@ void MapFitter::exhaustiveSearch()
   duration2_.sec = 0;
   duration2_.nsec = 0;
 
-  std::normal_distribution<float> distribution(0.0,3.0);
+  std::normal_distribution<> distribution(0.0,2.0);
 
   // initialize particles
   if (initializeSAD_ || initializeSSD_ || initializeNCC_ || initializeMI_)
@@ -223,31 +223,43 @@ void MapFitter::exhaustiveSearch()
   {
     if (SAD_)
     {
-      std::transform(particleRowSAD_.begin(), particleRowSAD_.end(), particleRowSAD_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
-      std::transform(particleRowSAD_.begin(), particleRowSAD_.end(), particleRowSAD_.begin(), std::bind2nd(std::modulus<int>(), rows));
-      std::transform(particleColSAD_.begin(), particleColSAD_.end(), particleColSAD_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
-      std::transform(particleColSAD_.begin(), particleColSAD_.end(), particleColSAD_.begin(), std::bind2nd(std::modulus<int>(), cols));
+      std::transform(particleRowSAD_.begin(), particleRowSAD_.end(), particleRowSAD_.begin(), std::bind2nd(std::plus<float>(),  -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2 ));
+      std::transform(particleColSAD_.begin(), particleColSAD_.end(), particleColSAD_.begin(), std::bind2nd(std::plus<float>(),  -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2 ));
+      for (int i = 0; i < particleRowSAD_.size(); i++)
+      {
+        particleRowSAD_[i] = fmod(particleRowSAD_[i], rows);
+        particleColSAD_[i] = fmod(particleColSAD_[i], cols);
+      }
     }
     if (SSD_)
     {
-      std::transform(particleRowSSD_.begin(), particleRowSSD_.end(), particleRowSSD_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
-      std::transform(particleRowSSD_.begin(), particleRowSSD_.end(), particleRowSSD_.begin(), std::bind2nd(std::modulus<int>(), rows));
-      std::transform(particleColSSD_.begin(), particleColSSD_.end(), particleColSSD_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
-      std::transform(particleColSSD_.begin(), particleColSSD_.end(), particleColSSD_.begin(), std::bind2nd(std::modulus<int>(), cols));
+      std::transform(particleRowSSD_.begin(), particleRowSSD_.end(), particleRowSSD_.begin(), std::bind2nd(std::plus<float>(),  -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2 ));
+      std::transform(particleColSSD_.begin(), particleColSSD_.end(), particleColSSD_.begin(), std::bind2nd(std::plus<float>(),  -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2 ));
+      for (int i = 0; i < particleRowSSD_.size(); i++)
+      {
+        particleRowSSD_[i] = fmod(particleRowSSD_[i], rows);
+        particleColSSD_[i] = fmod(particleColSSD_[i], cols);
+      }
     }
     if (NCC_)
     {
-      std::transform(particleRowNCC_.begin(), particleRowNCC_.end(), particleRowNCC_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
-      std::transform(particleRowNCC_.begin(), particleRowNCC_.end(), particleRowNCC_.begin(), std::bind2nd(std::modulus<int>(), rows));
-      std::transform(particleColNCC_.begin(), particleColNCC_.end(), particleColNCC_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
-      std::transform(particleColNCC_.begin(), particleColNCC_.end(), particleColNCC_.begin(), std::bind2nd(std::modulus<int>(), cols));
+      std::transform(particleRowNCC_.begin(), particleRowNCC_.end(), particleRowNCC_.begin(), std::bind2nd(std::plus<float>(),  -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2 ));
+      std::transform(particleColNCC_.begin(), particleColNCC_.end(), particleColNCC_.begin(), std::bind2nd(std::plus<float>(),  -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2 ));
+      for (int i = 0; i < particleRowNCC_.size(); i++)
+      {
+        particleRowNCC_[i] = fmod(particleRowNCC_[i], rows);
+        particleColNCC_[i] = fmod(particleColNCC_[i], cols);
+      }
     }
     if (MI_)
     {
-      std::transform(particleRowMI_.begin(), particleRowMI_.end(), particleRowMI_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
-      std::transform(particleRowMI_.begin(), particleRowMI_.end(), particleRowMI_.begin(), std::bind2nd(std::modulus<int>(), rows));
-      std::transform(particleColMI_.begin(), particleColMI_.end(), particleColMI_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
-      std::transform(particleColMI_.begin(), particleColMI_.end(), particleColMI_.begin(), std::bind2nd(std::modulus<int>(), cols));
+      std::transform(particleRowMI_.begin(), particleRowMI_.end(), particleRowMI_.begin(), std::bind2nd(std::plus<float>(),  -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2 ));
+      std::transform(particleColMI_.begin(), particleColMI_.end(), particleColMI_.begin(), std::bind2nd(std::plus<float>(),  -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2 ));
+      for (int i = 0; i < particleRowMI_.size(); i++)
+      {
+        particleRowMI_[i] = fmod(particleRowMI_[i], rows);
+        particleColMI_[i] = fmod(particleColMI_[i], cols);
+      }
     }
 
     templateRotation_ = fmod(templateRotation_ + distribution(generator_)/2 + 360, 360);
@@ -260,15 +272,15 @@ void MapFitter::exhaustiveSearch()
 
     for (int i = 0; i < particleRowSAD_.size(); i++)
     {
-      int row = particleRowSAD_[i];
-      int col = particleColSAD_[i];
-      grid_map::Index index = grid_map::Index(row, col);
-      int theta = particleThetaSAD_[i];
+      float row = particleRowSAD_[i];
+      float col = particleColSAD_[i];
+      grid_map::Index index = grid_map::Index(int(round(row))%rows, int(round(col))%cols);
+      float theta = particleThetaSAD_[i];
 
       float sin_theta = sin((theta+templateRotation_)/180*M_PI);
       float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
-      bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
+      bool success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
       if (success) 
       {
         float errSAD;
@@ -301,10 +313,12 @@ void MapFitter::exhaustiveSearch()
     std::vector<float>::iterator SADit = std::min_element(SAD.begin(), SAD.end());
     int bestSADparticle = std::distance(SAD.begin(), SADit);
     float bestSAD = SAD[bestSADparticle];
-    referenceMap_.getPosition(grid_map::Index(particleRowSAD_[bestSADparticle], particleColSAD_[bestSADparticle]), best_pos);
-    float bestXSAD = best_pos(0);
-    float bestYSAD = best_pos(1);
-    int bestThetaSAD = particleThetaSAD_[bestSADparticle];
+    int bestRow = int(round(particleRowSAD_[bestSADparticle])) % rows;
+    int bestCol = int(round(particleColSAD_[bestSADparticle])) % cols;
+    referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
+    float bestXSAD = best_pos(0) - ( particleRowSAD_[bestSADparticle]-int(round(particleRowSAD_[bestSADparticle])) )*referenceMap_.getResolution();;
+    float bestYSAD = best_pos(1) - ( particleColSAD_[bestSADparticle]-int(round(particleColSAD_[bestSADparticle])) )*referenceMap_.getResolution();;
+    float bestThetaSAD = particleThetaSAD_[bestSADparticle];
 
     // Calculate z alignement
     float z = findZ(data, reference_data, bestXSAD, bestYSAD, bestThetaSAD);
@@ -334,7 +348,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestSAD != 10 || bestSAD > SADThreshold_)                            // fix for second dataset with empty template update
+      if ((sum == 0.0 || bestSAD > SADThreshold_) && bestSAD != 10 )                           // fix for second dataset with empty template update
       {
         particleRowSAD_.clear();
         particleColSAD_.clear();
@@ -347,27 +361,28 @@ void MapFitter::exhaustiveSearch()
         std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
         std::partial_sum(beta.begin(), beta.end(), beta.begin());
 
-        std::vector< std::vector<int> > newParticles;
+        std::vector< std::vector<float> > newParticles;
         newParticles.clear();
         int numberOfParticles = particleRowSAD_.size();
-        if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        numberOfParticles = 8000;
         for (int i = 0; i < numberOfParticles; i++)
         {
           float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
           int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
 
-          std::vector<int> particle;
+          std::vector<float> particle;
           particle.clear();
 
-          particle.push_back( int(particleRowSAD_[ind] + round(distribution(generator_)) + rows) % rows );
-          particle.push_back( int(particleColSAD_[ind] + round(distribution(generator_)) + cols) % cols );
-          particle.push_back( int(particleThetaSAD_[ind] + round(distribution(generator_)) + 360) % 360);
+          particle.push_back( fmod(particleRowSAD_[ind] + distribution(generator_) + rows, rows) );
+          particle.push_back( fmod(particleColSAD_[ind] + distribution(generator_) + cols, cols) );
+          particle.push_back( fmod(particleThetaSAD_[ind] + distribution(generator_) + 360, 360) );
           newParticles.push_back(particle);
         }
         
-        std::sort(newParticles.begin(), newParticles.end());
-        auto last = std::unique(newParticles.begin(), newParticles.end());
-        newParticles.erase(last, newParticles.end());
+        //std::sort(newParticles.begin(), newParticles.end());
+        //auto last = std::unique(newParticles.begin(), newParticles.end());
+        //newParticles.erase(last, newParticles.end());
 
         numberOfParticles = newParticles.size();
         particleRowSAD_.clear();
@@ -392,15 +407,15 @@ void MapFitter::exhaustiveSearch()
 
     for (int i = 0; i < particleRowSSD_.size(); i++)
     {
-      int row = particleRowSSD_[i];
-      int col = particleColSSD_[i];
-      grid_map::Index index = grid_map::Index(row, col);
-      int theta = particleThetaSSD_[i];
+      float row = particleRowSSD_[i];
+      float col = particleColSSD_[i];
+      grid_map::Index index = grid_map::Index(int(round(row))%rows, int(round(col))%cols);
+      float theta = particleThetaSSD_[i];
 
       float sin_theta = sin((theta+templateRotation_)/180*M_PI);
       float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
-      bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
+      bool success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
       if (success) 
       {
         float errSSD;
@@ -433,10 +448,12 @@ void MapFitter::exhaustiveSearch()
     std::vector<float>::iterator SSDit = std::min_element(SSD.begin(), SSD.end());
     int bestSSDparticle = std::distance(SSD.begin(), SSDit);
     float bestSSD = SSD[bestSSDparticle];
-    referenceMap_.getPosition(grid_map::Index(particleRowSSD_[bestSSDparticle], particleColSSD_[bestSSDparticle]), best_pos);
-    float bestXSSD = best_pos(0);
-    float bestYSSD = best_pos(1);
-    int bestThetaSSD = particleThetaSSD_[bestSSDparticle];
+    int bestRow = int(round(particleRowSSD_[bestSSDparticle])) % rows;
+    int bestCol = int(round(particleColSSD_[bestSSDparticle])) % cols;
+    referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
+    float bestXSSD = best_pos(0) - ( particleRowSSD_[bestSSDparticle]-int(round(particleRowSSD_[bestSSDparticle])) )*referenceMap_.getResolution();
+    float bestYSSD = best_pos(1) - ( particleColSSD_[bestSSDparticle]-int(round(particleColSSD_[bestSSDparticle])) )*referenceMap_.getResolution();
+    float bestThetaSSD = particleThetaSSD_[bestSSDparticle];
 
     // Calculate z alignement
     float z = findZ(data, reference_data, bestXSSD, bestYSSD, bestThetaSSD);
@@ -466,7 +483,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestSSD != 10 || bestSSD > SSDThreshold_)                            // fix for second dataset with empty template update
+      if ((sum == 0.0 || bestSSD > SSDThreshold_) && bestSSD != 10 )                           // fix for second dataset with empty template update
       {
         particleRowSSD_.clear();
         particleColSSD_.clear();
@@ -479,27 +496,28 @@ void MapFitter::exhaustiveSearch()
         std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
         std::partial_sum(beta.begin(), beta.end(), beta.begin());
 
-        std::vector< std::vector<int> > newParticles;
+        std::vector< std::vector<float> > newParticles;
         newParticles.clear();
         int numberOfParticles = particleRowSSD_.size();
-        if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        numberOfParticles = 8000;
         for (int i = 0; i < numberOfParticles; i++)
         {
           float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
           int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
 
-          std::vector<int> particle;
+          std::vector<float> particle;
           particle.clear();
 
-          particle.push_back( int(particleRowSSD_[ind] + round(distribution(generator_)) + rows) % rows );
-          particle.push_back( int(particleColSSD_[ind] + round(distribution(generator_)) + cols) % cols );
-          particle.push_back( int(particleThetaSSD_[ind] + round(distribution(generator_)) + 360) % 360);
+          particle.push_back( fmod(particleRowSSD_[ind] + distribution(generator_) + rows, rows) );
+          particle.push_back( fmod(particleColSSD_[ind] + distribution(generator_) + cols, cols) );
+          particle.push_back( fmod(particleThetaSSD_[ind] + distribution(generator_) + 360, 360) );
           newParticles.push_back(particle);
         }
         
-        std::sort(newParticles.begin(), newParticles.end());
-        auto last = std::unique(newParticles.begin(), newParticles.end());
-        newParticles.erase(last, newParticles.end());
+        //std::sort(newParticles.begin(), newParticles.end());
+        //auto last = std::unique(newParticles.begin(), newParticles.end());
+        //newParticles.erase(last, newParticles.end());
 
         numberOfParticles = newParticles.size();
         particleRowSSD_.clear();
@@ -524,15 +542,15 @@ void MapFitter::exhaustiveSearch()
 
     for (int i = 0; i < particleRowNCC_.size(); i++)
     {
-      int row = particleRowNCC_[i];
-      int col = particleColNCC_[i];
-      grid_map::Index index = grid_map::Index(row, col);
-      int theta = particleThetaNCC_[i];
+      float row = particleRowNCC_[i];
+      float col = particleColNCC_[i];
+      grid_map::Index index = grid_map::Index(int(round(row))%rows, int(round(col))%cols);
+      float theta = particleThetaNCC_[i];
 
       float sin_theta = sin((theta+templateRotation_)/180*M_PI);
       float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
-      bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
+      bool success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
       if (success) 
       {
         float corrNCC;
@@ -565,10 +583,12 @@ void MapFitter::exhaustiveSearch()
     std::vector<float>::iterator NCCit = std::max_element(NCC.begin(), NCC.end());
     int bestNCCparticle = std::distance(NCC.begin(), NCCit);
     float bestNCC = NCC[bestNCCparticle];
-    referenceMap_.getPosition(grid_map::Index(particleRowNCC_[bestNCCparticle], particleColNCC_[bestNCCparticle]), best_pos);
-    float bestXNCC = best_pos(0);
-    float bestYNCC = best_pos(1);
-    int bestThetaNCC = particleThetaNCC_[bestNCCparticle];
+    int bestRow = int(round(particleRowNCC_[bestNCCparticle])) % rows;
+    int bestCol = int(round(particleColNCC_[bestNCCparticle])) % cols;
+    referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
+    float bestXNCC = best_pos(0) - ( particleRowNCC_[bestNCCparticle]-int(round(particleRowNCC_[bestNCCparticle])) )*referenceMap_.getResolution();;
+    float bestYNCC = best_pos(1) - ( particleColNCC_[bestNCCparticle]-int(round(particleColNCC_[bestNCCparticle])) )*referenceMap_.getResolution();;
+    float bestThetaNCC = particleThetaNCC_[bestNCCparticle];
 
     // Calculate z alignement
     float z = findZ(data, reference_data, bestXNCC, bestYNCC, bestThetaNCC);
@@ -598,7 +618,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestNCC != -1 || bestNCC < NCCThreshold_)                            // fix for second dataset with empty template update
+      if ((sum == 0.0 || bestNCC < NCCThreshold_) && bestNCC != -1 )                            // fix for second dataset with empty template update
       {
         particleRowNCC_.clear();
         particleColNCC_.clear();
@@ -611,27 +631,28 @@ void MapFitter::exhaustiveSearch()
         std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
         std::partial_sum(beta.begin(), beta.end(), beta.begin());
 
-        std::vector< std::vector<int> > newParticles;
+        std::vector< std::vector<float> > newParticles;
         newParticles.clear();
         int numberOfParticles = particleRowNCC_.size();
-        if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        numberOfParticles = 8000;
         for (int i = 0; i < numberOfParticles; i++)
         {
           float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
           int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
 
-          std::vector<int> particle;
+          std::vector<float> particle;
           particle.clear();
 
-          particle.push_back( int(particleRowNCC_[ind] + round(distribution(generator_)) + rows) % rows );
-          particle.push_back( int(particleColNCC_[ind] + round(distribution(generator_)) + cols) % cols );
-          particle.push_back( int(particleThetaNCC_[ind] + round(distribution(generator_)) + 360) % 360);
+          particle.push_back( fmod(particleRowNCC_[ind] + distribution(generator_) + rows, rows) );
+          particle.push_back( fmod(particleColNCC_[ind] + distribution(generator_) + cols, cols) );
+          particle.push_back( fmod(particleThetaNCC_[ind] + distribution(generator_) + 360, 360) );
           newParticles.push_back(particle);
         }
         
-        std::sort(newParticles.begin(), newParticles.end());
-        auto last = std::unique(newParticles.begin(), newParticles.end());
-        newParticles.erase(last, newParticles.end());
+        //std::sort(newParticles.begin(), newParticles.end());
+        //auto last = std::unique(newParticles.begin(), newParticles.end());
+        //newParticles.erase(last, newParticles.end());
 
         numberOfParticles = newParticles.size();
         particleRowNCC_.clear();
@@ -660,15 +681,15 @@ void MapFitter::exhaustiveSearch()
 
     for (int i = 0; i < particleRowMI_.size(); i++)
     {
-      int row = particleRowMI_[i];
-      int col = particleColMI_[i];
-      grid_map::Index index = grid_map::Index(row, col);
-      int theta = particleThetaMI_[i];
+      float row = particleRowMI_[i];
+      float col = particleColMI_[i];
+      grid_map::Index index = grid_map::Index(int(round(row))%rows, int(round(col))%cols);
+      float theta = particleThetaMI_[i];
 
       float sin_theta = sin((theta+templateRotation_)/180*M_PI);
       float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
-      bool success = findMatches(data, variance_data, reference_data, index, sin_theta, cos_theta );
+      bool success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
       if (success) 
       {
         float mutInfo;
@@ -701,10 +722,12 @@ void MapFitter::exhaustiveSearch()
     std::vector<float>::iterator MIit = std::max_element(MI.begin(), MI.end());
     int bestMIparticle = std::distance(MI.begin(), MIit);
     float bestMI = MI[bestMIparticle];
-    referenceMap_.getPosition(grid_map::Index(particleRowMI_[bestMIparticle], particleColMI_[bestMIparticle]), best_pos);
-    float bestXMI = best_pos(0);
-    float bestYMI = best_pos(1);
-    int bestThetaMI = particleThetaMI_[bestMIparticle];
+    int bestRow = int(round(particleRowMI_[bestMIparticle])) % rows;
+    int bestCol = int(round(particleColMI_[bestMIparticle])) % cols;
+    referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
+    float bestXMI = best_pos(0) - ( particleRowMI_[bestMIparticle]-int(round(particleRowMI_[bestMIparticle])) )*referenceMap_.getResolution();;
+    float bestYMI = best_pos(1) - ( particleColMI_[bestMIparticle]-int(round(particleColMI_[bestMIparticle])) )*referenceMap_.getResolution();;
+    float bestThetaMI = particleThetaMI_[bestMIparticle];
 
     // Calculate z alignement
     float z = findZ(data, reference_data, bestXMI, bestYMI, bestThetaMI);
@@ -734,7 +757,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestMI != -10 || bestMI < MIThreshold_)                            // fix for second dataset with empty template update
+      if ((sum == 0.0 || bestMI < MIThreshold_) && bestMI != -10 )                             // fix for second dataset with empty template update
       {
         particleRowMI_.clear();
         particleColMI_.clear();
@@ -747,27 +770,28 @@ void MapFitter::exhaustiveSearch()
         std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
         std::partial_sum(beta.begin(), beta.end(), beta.begin());
 
-        std::vector< std::vector<int> > newParticles;
+        std::vector< std::vector<float> > newParticles;
         newParticles.clear();
         int numberOfParticles = particleRowMI_.size();
-        if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        numberOfParticles = 8000;
         for (int i = 0; i < numberOfParticles; i++)
         {
           float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
           int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
 
-          std::vector<int> particle;
+          std::vector<float> particle;
           particle.clear();
 
-          particle.push_back( int(particleRowMI_[ind] + round(distribution(generator_)) + rows) % rows );
-          particle.push_back( int(particleColMI_[ind] + round(distribution(generator_)) + cols) % cols );
-          particle.push_back( int(particleThetaMI_[ind] + round(distribution(generator_)) + 360) % 360);
+          particle.push_back( fmod(particleRowMI_[ind] + distribution(generator_) + rows, rows) );
+          particle.push_back( fmod(particleColMI_[ind] + distribution(generator_) + cols, cols) );
+          particle.push_back( fmod(particleThetaMI_[ind] + distribution(generator_) + 360, 360) );
           newParticles.push_back(particle);
         }
         
-        std::sort(newParticles.begin(), newParticles.end());
-        auto last = std::unique(newParticles.begin(), newParticles.end());
-        newParticles.erase(last, newParticles.end());
+        //std::sort(newParticles.begin(), newParticles.end());
+        //auto last = std::unique(newParticles.begin(), newParticles.end());
+        //newParticles.erase(last, newParticles.end());
 
         numberOfParticles = newParticles.size();
         particleRowMI_.clear();
@@ -804,7 +828,7 @@ void MapFitter::exhaustiveSearch()
   isActive_ = false;
 }
 
-float MapFitter::findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data, float x, float y, int theta)
+float MapFitter::findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data, float x, float y, float theta)
 {
   grid_map::Index reference_index;
   referenceMap_.getIndex(grid_map::Position(x,y), reference_index);
@@ -869,7 +893,7 @@ float MapFitter::findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data,
   return reference_mean - shifted_mean;
 }
 
-bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float sin_theta, float cos_theta)
+bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, float row, float col, float sin_theta, float cos_theta)
 {
   // initialize
   int points = 0;
@@ -893,8 +917,8 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
   Eigen::Array2i reference_start_index = referenceMap_.getStartIndex();
   int reference_start_index_x = reference_start_index(0);
   int reference_start_index_y = reference_start_index(1);
-  int reference_index_x = reference_index(0);
-  int reference_index_y = reference_index(1);
+  float reference_index_x = row;//reference_index(0);
+  float reference_index_y = col;//reference_index(1);
 
   for (int i = 0; i <= size_x-correlationIncrement_; i += correlationIncrement_)
   {
@@ -907,11 +931,11 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
       if (mapHeight == mapHeight)
       {
         points += 1;
-        int reference_buffer_index_x = reference_size_x - reference_start_index_x + reference_index_x;
-        int reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
+        float reference_buffer_index_x = reference_size_x - reference_start_index_x + reference_index_x;
+        float reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
 
-        int shifted_index_x = reference_buffer_index_x % reference_size_x - round(cos_theta*(float(size_x)/2-i) - sin_theta*(float(size_y)/2-j));
-        int shifted_index_y = reference_buffer_index_y % reference_size_y - round(sin_theta*(float(size_x)/2-i) + cos_theta*(float(size_y)/2-j));
+        int shifted_index_x = round(fmod(reference_buffer_index_x, reference_size_x) - (cos_theta*(float(size_x)/2-i) - sin_theta*(float(size_y)/2-j)) );
+        int shifted_index_y = round(fmod(reference_buffer_index_y, reference_size_y) - (sin_theta*(float(size_x)/2-i) + cos_theta*(float(size_y)/2-j)) );
               
         if (shifted_index_x >= 0 && shifted_index_x < reference_size_x && shifted_index_y >= 0 && shifted_index_y < reference_size_y )
         {
