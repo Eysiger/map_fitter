@@ -56,10 +56,10 @@ bool MapFitter::readParameters()
   nodeHandle_.param("position_increment_search", searchIncrement_, 5);
   nodeHandle_.param("position_increment_correlation", correlationIncrement_, 5);
   nodeHandle_.param("required_overlap", requiredOverlap_, float(0.75));
-  nodeHandle_.param("NCC_threshold", NCCThreshold_, float(0));
-  nodeHandle_.param("SSD_threshold", SSDThreshold_, float(10));
-  nodeHandle_.param("SAD_threshold", SADThreshold_, float(10));
-  nodeHandle_.param("MI_threshold", MIThreshold_, float(-10));
+  nodeHandle_.param("SAD_threshold", SADThreshold_, float(0.05));
+  nodeHandle_.param("SSD_threshold", SSDThreshold_, float(0.008));
+  nodeHandle_.param("NCC_threshold", NCCThreshold_, float(0.65));
+  nodeHandle_.param("MI_threshold", MIThreshold_, float(0));
 
   double activityCheckRate;
   nodeHandle_.param("activity_check_rate", activityCheckRate, 1.0);
@@ -334,7 +334,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestSAD != 10)                            // fix for second dataset with empty template update
+      if (sum == 0.0 && bestSAD != 10 || bestSAD > SADThreshold_)                            // fix for second dataset with empty template update
       {
         particleRowSAD_.clear();
         particleColSAD_.clear();
@@ -466,7 +466,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestSSD != 10)                            // fix for second dataset with empty template update
+      if (sum == 0.0 && bestSSD != 10 || bestSSD > SSDThreshold_)                            // fix for second dataset with empty template update
       {
         particleRowSSD_.clear();
         particleColSSD_.clear();
@@ -598,7 +598,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestNCC != -1)                            // fix for second dataset with empty template update
+      if (sum == 0.0 && bestNCC != -1 || bestNCC < NCCThreshold_)                            // fix for second dataset with empty template update
       {
         particleRowNCC_.clear();
         particleColNCC_.clear();
@@ -734,7 +734,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestMI != -10)                            // fix for second dataset with empty template update
+      if (sum == 0.0 && bestMI != -10 || bestMI < MIThreshold_)                            // fix for second dataset with empty template update
       {
         particleRowMI_.clear();
         particleColMI_.clear();

@@ -10,7 +10,7 @@ position_increment_search: 5
 position_increment_correlation: 5
 required_overlap: 0.75
 
-NCC_threshold:  0
-SSD_threshold: 10
-SAD_threshold: 10
-MI_threshold: -10
+SAD_threshold: 0.05
+SSD_threshold: 0.008
+NCC_threshold: 0.65
+MI_threshold:  0
