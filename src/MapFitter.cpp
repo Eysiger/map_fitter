@@ -172,6 +172,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
   tf::Matrix3x3 m(correct_position.getRotation());
   double roll, pitch, yaw;
   m.getRPY(roll, pitch, yaw);
+  float previous_templateRotation = templateRotation_;
   templateRotation_ = 360 - fmod(yaw/M_PI*180+360,360);
   grid_map::Position shift = grid_map::Position(map_position_(0)-correct_position.getOrigin().x(), map_position_(1)-correct_position.getOrigin().y() );
 
@@ -241,6 +242,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       std::transform(particleRowSAD_.begin(), particleRowSAD_.end(), particleRowSAD_.begin(), std::bind2nd(std::modulus<int>(), rows));
       std::transform(particleColSAD_.begin(), particleColSAD_.end(), particleColSAD_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
       std::transform(particleColSAD_.begin(), particleColSAD_.end(), particleColSAD_.begin(), std::bind2nd(std::modulus<int>(), cols));
+      std::transform(particleThetaSAD_.begin(), particleThetaSAD_.end(), particleThetaSAD_.begin(), std::bind2nd(std::plus<int>(), round( (templateRotation_ - previous_templateRotation) + 360 + distribution(generator_)/2) ));
+      std::transform(particleThetaSAD_.begin(), particleThetaSAD_.end(), particleThetaSAD_.begin(), std::bind2nd(std::modulus<int>(), 360));
     }
     if (SSD_)
     {
@@ -248,6 +251,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       std::transform(particleRowSSD_.begin(), particleRowSSD_.end(), particleRowSSD_.begin(), std::bind2nd(std::modulus<int>(), rows));
       std::transform(particleColSSD_.begin(), particleColSSD_.end(), particleColSSD_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
       std::transform(particleColSSD_.begin(), particleColSSD_.end(), particleColSSD_.begin(), std::bind2nd(std::modulus<int>(), cols));
+      std::transform(particleThetaSSD_.begin(), particleThetaSSD_.end(), particleThetaSSD_.begin(), std::bind2nd(std::plus<int>(), round( (templateRotation_ - previous_templateRotation) + 360 + distribution(generator_)/2) ));
+      std::transform(particleThetaSSD_.begin(), particleThetaSSD_.end(), particleThetaSSD_.begin(), std::bind2nd(std::modulus<int>(), 360));
     }
     if (NCC_)
     {
@@ -255,6 +260,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       std::transform(particleRowNCC_.begin(), particleRowNCC_.end(), particleRowNCC_.begin(), std::bind2nd(std::modulus<int>(), rows));
       std::transform(particleColNCC_.begin(), particleColNCC_.end(), particleColNCC_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
       std::transform(particleColNCC_.begin(), particleColNCC_.end(), particleColNCC_.begin(), std::bind2nd(std::modulus<int>(), cols));
+      std::transform(particleThetaNCC_.begin(), particleThetaNCC_.end(), particleThetaNCC_.begin(), std::bind2nd(std::plus<int>(), round( (templateRotation_ - previous_templateRotation) + 360 + distribution(generator_)/2) ));
+      std::transform(particleThetaNCC_.begin(), particleThetaNCC_.end(), particleThetaNCC_.begin(), std::bind2nd(std::modulus<int>(), 360));
     }
     if (MI_)
     {
@@ -262,6 +269,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       std::transform(particleRowMI_.begin(), particleRowMI_.end(), particleRowMI_.begin(), std::bind2nd(std::modulus<int>(), rows));
       std::transform(particleColMI_.begin(), particleColMI_.end(), particleColMI_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
       std::transform(particleColMI_.begin(), particleColMI_.end(), particleColMI_.begin(), std::bind2nd(std::modulus<int>(), cols));
+      std::transform(particleThetaMI_.begin(), particleThetaMI_.end(), particleThetaMI_.begin(), std::bind2nd(std::plus<int>(), round( (templateRotation_ - previous_templateRotation) + 360 + distribution(generator_)/2) ));
+      std::transform(particleThetaMI_.begin(), particleThetaMI_.end(), particleThetaMI_.begin(), std::bind2nd(std::modulus<int>(), 360));
     }
 
     //templateRotation_ = fmod(templateRotation_ + distribution(generator_)/2 + 360, 360);
