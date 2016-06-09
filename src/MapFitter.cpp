@@ -24,6 +24,7 @@ MapFitter::MapFitter(ros::NodeHandle& nodeHandle)
                                                 &MapFitter::updateSubscriptionCallback,
                                                 this);
   broadcastTimer_ = nodeHandle_.createTimer(ros::Duration(0.01), &MapFitter::tfBroadcast, this);
+  listenerTimer_  = nodeHandle_.createTimer(ros::Duration(0.01), &MapFitter::tfListener, this);
   corrPointPublisher_ = nodeHandle_.advertise<geometry_msgs::PointStamped>("/corrPoint",1);
   SSDPointPublisher_ = nodeHandle_.advertise<geometry_msgs::PointStamped>("/SSDPoint",1);
   SADPointPublisher_ = nodeHandle_.advertise<geometry_msgs::PointStamped>("/SADPoint",1);
@@ -94,8 +95,7 @@ void MapFitter::updateSubscriptionCallback(const ros::TimerEvent&)
 
 void MapFitter::callback(const grid_map_msgs::GridMap& message)
 {
-  ROS_INFO("Map fitter received a map (timestamp %f) for matching.",
-            message.info.header.stamp.toSec());
+  ROS_INFO("Map fitter received a map (timestamp %f) for matching.", message.info.header.stamp.toSec());
   grid_map::GridMapRosConverter::fromMessage(message, map_);
 
   grid_map::Index submap_start_index;
@@ -151,8 +151,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
   int rows = reference_size(0);
   int cols = reference_size(1);
 
-  grid_map::Position previous_position = correct_position_;
-  correct_position_ = map_.getPosition();
+  grid_map::Position previous_position = map_position_;
+  map_position_ = map_.getPosition();
   grid_map::Position position = referenceMap_.getPosition();
   grid_map::Size size = map_.getSize();
   grid_map::Index start_index = map_.getStartIndex();
@@ -165,6 +165,15 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
   grid_map_msgs::GridMap reference_msg;
   grid_map::GridMapRosConverter::toMessage(referenceMap_, reference_msg);
   referencePublisher_.publish(reference_msg);
+
+  tf::StampedTransform correct_position;
+  try { listener_.lookupTransform("/map", "/footprint", ros::Time(0), correct_position); }
+  catch (tf::TransformException ex) { ROS_ERROR("%s",ex.what()); }
+  tf::Matrix3x3 m(correct_position.getRotation());
+  double roll, pitch, yaw;
+  m.getRPY(roll, pitch, yaw);
+  templateRotation_ = 360 - fmod(yaw/M_PI*180+360,360);
+  grid_map::Position shift = grid_map::Position(map_position_(0)-correct_position.getOrigin().x(), map_position_(1)-correct_position.getOrigin().y() );
 
   ros::Time time = ros::Time::now();
   duration1_.sec = 0;
@@ -184,7 +193,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       {
         grid_map::Index index(*iterator);
       //grid_map::Index index;
-      //referenceMap_.getIndex(correct_position_, index);
+      //referenceMap_.getIndex(map_position_, index);
         if (initializeSAD_)
         {
           particleRowSAD_.push_back(index(0));
@@ -212,7 +221,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         numberOfParticles += 1;
       }
     }
-    templateRotation_ = static_cast <float> (rand() / static_cast <float> (RAND_MAX/360)); //rand() %360;
+    //templateRotation_ = static_cast <float> (rand() / static_cast <float> (RAND_MAX/360)); //rand() %360;
 
     if (initializeSAD_) { std::cout <<"Number of particles SAD: " << numberOfParticles << std::endl; }
     if (initializeSSD_) { std::cout <<"Number of particles SSD: " << numberOfParticles << std::endl; }
@@ -228,34 +237,34 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
   {
     if (SAD_)
     {
-      std::transform(particleRowSAD_.begin(), particleRowSAD_.end(), particleRowSAD_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
+      std::transform(particleRowSAD_.begin(), particleRowSAD_.end(), particleRowSAD_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
       std::transform(particleRowSAD_.begin(), particleRowSAD_.end(), particleRowSAD_.begin(), std::bind2nd(std::modulus<int>(), rows));
-      std::transform(particleColSAD_.begin(), particleColSAD_.end(), particleColSAD_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
+      std::transform(particleColSAD_.begin(), particleColSAD_.end(), particleColSAD_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
       std::transform(particleColSAD_.begin(), particleColSAD_.end(), particleColSAD_.begin(), std::bind2nd(std::modulus<int>(), cols));
     }
     if (SSD_)
     {
-      std::transform(particleRowSSD_.begin(), particleRowSSD_.end(), particleRowSSD_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
+      std::transform(particleRowSSD_.begin(), particleRowSSD_.end(), particleRowSSD_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
       std::transform(particleRowSSD_.begin(), particleRowSSD_.end(), particleRowSSD_.begin(), std::bind2nd(std::modulus<int>(), rows));
-      std::transform(particleColSSD_.begin(), particleColSSD_.end(), particleColSSD_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
+      std::transform(particleColSSD_.begin(), particleColSSD_.end(), particleColSSD_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
       std::transform(particleColSSD_.begin(), particleColSSD_.end(), particleColSSD_.begin(), std::bind2nd(std::modulus<int>(), cols));
     }
     if (NCC_)
     {
-      std::transform(particleRowNCC_.begin(), particleRowNCC_.end(), particleRowNCC_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
+      std::transform(particleRowNCC_.begin(), particleRowNCC_.end(), particleRowNCC_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
       std::transform(particleRowNCC_.begin(), particleRowNCC_.end(), particleRowNCC_.begin(), std::bind2nd(std::modulus<int>(), rows));
-      std::transform(particleColNCC_.begin(), particleColNCC_.end(), particleColNCC_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
+      std::transform(particleColNCC_.begin(), particleColNCC_.end(), particleColNCC_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
       std::transform(particleColNCC_.begin(), particleColNCC_.end(), particleColNCC_.begin(), std::bind2nd(std::modulus<int>(), cols));
     }
     if (MI_)
     {
-      std::transform(particleRowMI_.begin(), particleRowMI_.end(), particleRowMI_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
+      std::transform(particleRowMI_.begin(), particleRowMI_.end(), particleRowMI_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(0) - previous_position(0)) / referenceMap_.getResolution() + rows + distribution(generator_)/2) ));
       std::transform(particleRowMI_.begin(), particleRowMI_.end(), particleRowMI_.begin(), std::bind2nd(std::modulus<int>(), rows));
-      std::transform(particleColMI_.begin(), particleColMI_.end(), particleColMI_.begin(), std::bind2nd(std::plus<int>(), round( -(correct_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
+      std::transform(particleColMI_.begin(), particleColMI_.end(), particleColMI_.begin(), std::bind2nd(std::plus<int>(), round( -(map_position_(1) - previous_position(1)) / referenceMap_.getResolution() + cols + distribution(generator_)/2) ));
       std::transform(particleColMI_.begin(), particleColMI_.end(), particleColMI_.begin(), std::bind2nd(std::modulus<int>(), cols));
     }
 
-    templateRotation_ = fmod(templateRotation_ + distribution(generator_)/2 + 360, 360);
+    //templateRotation_ = fmod(templateRotation_ + distribution(generator_)/2 + 360, 360);
   }
 
   if (SAD_)
@@ -316,11 +325,11 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     ros::Time pubTime = ros::Time::now();
     if (bestSAD != 10) 
     {
-      cumulativeErrorSAD_ += sqrt((bestXSAD - correct_position_(0))*(bestXSAD - correct_position_(0)) + (bestYSAD - correct_position_(1))*(bestYSAD - correct_position_(1)));
-      if (sqrt((bestXSAD - correct_position_(0))*(bestXSAD - correct_position_(0)) + (bestYSAD - correct_position_(1))*(bestYSAD - correct_position_(1))) < 0.5 && fabs(bestThetaSAD - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesSAD_ += 1;}
+      cumulativeErrorSAD_ += sqrt((bestXSAD - map_position_(0))*(bestXSAD - map_position_(0)) + (bestYSAD - map_position_(1))*(bestYSAD - map_position_(1)));
+      if (sqrt((bestXSAD - map_position_(0))*(bestXSAD - map_position_(0)) + (bestYSAD - map_position_(1))*(bestYSAD - map_position_(1))) < 0.5 && (fabs(bestThetaSAD - (360-templateRotation_)) < angleIncrement_ || fabs(bestThetaSAD - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesSAD_ += 1;}
       geometry_msgs::PointStamped SADPoint;
-      SADPoint.point.x = bestXSAD;
-      SADPoint.point.y = bestYSAD;
+      SADPoint.point.x = bestXSAD - shift(0);
+      SADPoint.point.y = bestYSAD - shift(1);
       SADPoint.point.z = bestThetaSAD;
       SADPoint.header.stamp = pubTime;
       SADPointPublisher_.publish(SADPoint);
@@ -448,11 +457,11 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     ros::Time pubTime = ros::Time::now();
     if (bestSSD != 10) 
     {
-      cumulativeErrorSSD_ += sqrt((bestXSSD - correct_position_(0))*(bestXSSD - correct_position_(0)) + (bestYSSD - correct_position_(1))*(bestYSSD - correct_position_(1)));
-      if (sqrt((bestXSSD - correct_position_(0))*(bestXSSD - correct_position_(0)) + (bestYSSD - correct_position_(1))*(bestYSSD - correct_position_(1))) < 0.5 && fabs(bestThetaSSD - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesSSD_ += 1;}
+      cumulativeErrorSSD_ += sqrt((bestXSSD - map_position_(0))*(bestXSSD - map_position_(0)) + (bestYSSD - map_position_(1))*(bestYSSD - map_position_(1)));
+      if (sqrt((bestXSSD - map_position_(0))*(bestXSSD - map_position_(0)) + (bestYSSD - map_position_(1))*(bestYSSD - map_position_(1))) < 0.5 && (fabs(bestThetaSSD - (360-templateRotation_)) < angleIncrement_ || fabs(bestThetaSSD - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesSSD_ += 1;}
       geometry_msgs::PointStamped SSDPoint;
-      SSDPoint.point.x = bestXSSD;
-      SSDPoint.point.y = bestYSSD;
+      SSDPoint.point.x = bestXSSD - shift(0);
+      SSDPoint.point.y = bestYSSD - shift(1);
       SSDPoint.point.z = bestThetaSSD;
       SSDPoint.header.stamp = pubTime;
       SSDPointPublisher_.publish(SSDPoint);
@@ -580,11 +589,11 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     ros::Time pubTime = ros::Time::now();
     if (bestNCC != -1) 
     {
-      cumulativeErrorCorr_ += sqrt((bestXNCC - correct_position_(0))*(bestXNCC - correct_position_(0)) + (bestYNCC - correct_position_(1))*(bestYNCC - correct_position_(1)));
-      if (sqrt((bestXNCC - correct_position_(0))*(bestXNCC - correct_position_(0)) + (bestYNCC - correct_position_(1))*(bestYNCC - correct_position_(1))) < 0.5 && fabs(bestThetaNCC - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesCorr_ += 1;}
+      cumulativeErrorCorr_ += sqrt((bestXNCC - map_position_(0))*(bestXNCC - map_position_(0)) + (bestYNCC - map_position_(1))*(bestYNCC - map_position_(1)));
+      if (sqrt((bestXNCC - map_position_(0))*(bestXNCC - map_position_(0)) + (bestYNCC - map_position_(1))*(bestYNCC - map_position_(1))) < 0.5 && (fabs(bestThetaNCC - (360-templateRotation_)) < angleIncrement_ || fabs(bestThetaNCC - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesCorr_ += 1;}
       geometry_msgs::PointStamped corrPoint;
-      corrPoint.point.x = bestXNCC;
-      corrPoint.point.y = bestYNCC;
+      corrPoint.point.x = bestXNCC - shift(0);
+      corrPoint.point.y = bestYNCC - shift(1);
       corrPoint.point.z = bestThetaNCC;
       corrPoint.header.stamp = pubTime;
       corrPointPublisher_.publish(corrPoint);
@@ -716,11 +725,11 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     ros::Time pubTime = ros::Time::now();
     if (bestMI != -10) 
     {
-      cumulativeErrorMI_ += sqrt((bestXMI - correct_position_(0))*(bestXMI - correct_position_(0)) + (bestYMI - correct_position_(1))*(bestYMI - correct_position_(1)));
-      if (sqrt((bestXMI - correct_position_(0))*(bestXMI - correct_position_(0)) + (bestYMI - correct_position_(1))*(bestYMI - correct_position_(1))) < 0.5 && fabs(bestThetaMI - (360-int(templateRotation_))%360) < angleIncrement_) {correctMatchesMI_ += 1;}
+      cumulativeErrorMI_ += sqrt((bestXMI - map_position_(0))*(bestXMI - map_position_(0)) + (bestYMI - map_position_(1))*(bestYMI - map_position_(1)));
+      if (sqrt((bestXMI - map_position_(0))*(bestXMI - map_position_(0)) + (bestYMI - map_position_(1))*(bestYMI - map_position_(1))) < 0.5 && (fabs(bestThetaMI - (360-templateRotation_)) < angleIncrement_ || fabs(bestThetaMI - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesMI_ += 1;}
       geometry_msgs::PointStamped MIPoint;
-      MIPoint.point.x = bestXMI;
-      MIPoint.point.y = bestYMI;
+      MIPoint.point.x = bestXMI - shift(0);
+      MIPoint.point.y = bestYMI - shift(1);
       MIPoint.point.z = bestThetaMI;
       MIPoint.header.stamp = pubTime;
       MIPointPublisher_.publish(MIPoint);
@@ -794,14 +803,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
   grid_map::GridMapRosConverter::toMessage(correlationMap, correlation_msg);
   correlationPublisher_.publish(correlation_msg); 
 
-  ros::Time pubTime = ros::Time::now();
-  geometry_msgs::PointStamped correctPoint;
-  correctPoint.point.x = correct_position_(0);
-  correctPoint.point.y = correct_position_(1);
-  correctPoint.point.z = (360.0-templateRotation_);
-  correctPoint.header.stamp = pubTime;
-  correctPointPublisher_.publish(correctPoint);
-  std::cout << "Correct position " << correct_position_.transpose() << " and theta " << (360.0-templateRotation_) << std::endl;
+  std::cout << "Correct position " << map_position_.transpose() << " and theta " << (360-templateRotation_) << std::endl;
 
   ros::Duration duration = ros::Time::now() - time;
   std::cout << "Time used: " << duration.toSec() << " Sekunden" << " 1: " << duration1_.toSec() << " 2: " << duration2_.toSec() << std::endl;
@@ -1079,13 +1081,13 @@ float MapFitter::weightedMutualInformation()
 {
   ros::Time time1 = ros::Time::now();
 
-  const int numberOfBins = 128;
-
   float minHeight = map_min_ - shifted_mean_;
   if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
 
   float maxHeight = map_max_ - shifted_mean_;
   if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
+
+  const int numberOfBins = 128;
 
   float binWidth = (maxHeight - minHeight + 1e-6) / numberOfBins;
   float hist[numberOfBins] = {0.0};
@@ -1135,6 +1137,25 @@ void MapFitter::tfBroadcast(const ros::TimerEvent&)
       tf::StampedTransform(
         tf::Transform(tf::Quaternion(0, 0, 0, 1), tf::Vector3(0.0, 0.0, 0.0)), 
           ros::Time::now(),"/map", "/grid_map"));
+}
+
+void MapFitter::tfListener(const ros::TimerEvent&)
+{
+  tf::StampedTransform position;
+  try { listener_.lookupTransform("/map", "/footprint", ros::Time(0), position); }
+  catch (tf::TransformException ex) { //ROS_ERROR("%s",ex.what()); 
+  return; }
+  tf::Matrix3x3 m(position.getRotation());
+  double roll, pitch, yaw;
+  m.getRPY(roll, pitch, yaw);
+
+  ros::Time pubTime = ros::Time::now();
+  geometry_msgs::PointStamped correctPoint;
+  correctPoint.point.x = position.getOrigin().x();
+  correctPoint.point.y = position.getOrigin().y();
+  correctPoint.point.z = fmod(yaw/M_PI*180+360, 360);
+  correctPoint.header.stamp = pubTime;
+  correctPointPublisher_.publish(correctPoint);
 }
 
 } /* namespace */

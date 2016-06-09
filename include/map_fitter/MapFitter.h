@@ -15,6 +15,7 @@
 #include <math.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
+#include <tf/transform_listener.h>
 #include <grid_map_core/GridMap.hpp>
 #include <grid_map_core/iterators/GridMapIterator.hpp>
 #include <grid_map_core/iterators/SubmapIteratorSparse.hpp>
@@ -81,6 +82,8 @@ private:
 
     void tfBroadcast(const ros::TimerEvent& timerEvent);
 
+    void tfListener(const ros::TimerEvent& timerEvent);
+
 
     //! ROS nodehandle.
   	ros::NodeHandle& nodeHandle_;
@@ -104,6 +107,7 @@ private:
     ros::Timer activityCheckTimer_;
 
     ros::Timer broadcastTimer_;
+    ros::Timer listenerTimer_;
 
     //! If the grid map visualization is subscribed to the grid map.
     bool isActive_;
@@ -149,6 +153,7 @@ private:
 
 
     tf::TransformBroadcaster broadcaster_;
+    tf::TransformListener listener_;
 
 
     float map_min_;
@@ -190,7 +195,7 @@ private:
     std::vector<float> xy_reference_var_;
 
     float templateRotation_;
-    grid_map::Position correct_position_;
+    grid_map::Position map_position_;
     std::default_random_engine generator_;
 
     std::vector<int> particleRowSAD_;
