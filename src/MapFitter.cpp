@@ -37,7 +37,7 @@ MapFitter::~MapFitter()
 
 bool MapFitter::readParameters()
 {
-  set_ = "set2";
+  set_ = "set1";
   weighted_ = true;
   resample_ = true;
 
@@ -55,7 +55,7 @@ bool MapFitter::readParameters()
   nodeHandle_.param("angle_increment", angleIncrement_, 5);
   nodeHandle_.param("position_increment_search", searchIncrement_, 5);
   nodeHandle_.param("position_increment_correlation", correlationIncrement_, 5);
-  nodeHandle_.param("required_overlap", requiredOverlap_, float(0.75));
+  nodeHandle_.param("required_overlap", requiredOverlap_, float(0.25));
   nodeHandle_.param("SAD_threshold", SADThreshold_, float(0.05));
   nodeHandle_.param("SSD_threshold", SSDThreshold_, float(0.008));
   nodeHandle_.param("NCC_threshold", NCCThreshold_, float(0.65));
@@ -98,6 +98,8 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
             message.info.header.stamp.toSec());
   grid_map::GridMapRosConverter::fromMessage(message, map_);
 
+  grid_map::Index submap_start_index;
+  grid_map::Size submap_size;
   if (set_ == "set1") 
   { 
     grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
@@ -107,14 +109,36 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
     //extendMap.setGeometry(grid_map::Length(10.5,7.5), referenceMap_.getResolution(), referenceMap_.getPosition());
     //extendMap.setFrameId("grid_map");
     //referenceMap_.extendToInclude(extendMap);
+
+    referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
+
+    grid_map::Size reference_size = referenceMap_.getSize();
+    grid_map::Index reference_start_index = referenceMap_.getStartIndex();
+
+    for (grid_map::GridMapIterator iterator(referenceMap_); !iterator.isPastEnd(); ++iterator) 
+    {
+      grid_map::Index index(*iterator);
+      grid_map::Index shaped_index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
+      grid_map::Index shaped_submap_start_index = grid_map::getIndexFromBufferIndex(submap_start_index, reference_size, reference_start_index);
+      bool outside_submap = (shaped_index(0) < shaped_submap_start_index(0)-0 || shaped_index(1) < shaped_submap_start_index(1)-0 || shaped_index(0) > shaped_submap_start_index(0)+submap_size(0)+0 || shaped_index(1) > shaped_submap_start_index(1)+submap_size(1)+0);
+      if ( outside_submap )
+      {
+        referenceMap_.at("elevation", index) = -0.75; //static_cast <float> (rand()) / static_cast <float> (RAND_MAX) -1;
+      }
+    }
   }
   
-  if (set_ == "set2") { grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_); }
+  if (set_ == "set2") 
+  { 
+    grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_); 
+    
+    referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
+  }
 
-  exhaustiveSearch();
+  exhaustiveSearch(submap_start_index, submap_size);
 }
 
-void MapFitter::exhaustiveSearch()
+void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::Size submap_size)
 {
   // initialize correlationMap
   grid_map::GridMap correlationMap({"correlation","rotationNCC","SSD","rotationSSD","SAD","rotationSAD", "MI", "rotationMI"});
@@ -137,25 +161,6 @@ void MapFitter::exhaustiveSearch()
   grid_map::Matrix& reference_data = referenceMap_["elevation"];
   grid_map::Matrix& data = map_["elevation"];
   grid_map::Matrix& variance_data = map_["variance"];
-
-  grid_map::Index submap_start_index;
-  grid_map::Size submap_size;
-  referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
-  //std::cout << reference_start_index.transpose() << " reference_size: "<< reference_size.transpose() << "submap" << submap_start_index.transpose() << " size " << submap_size.transpose() << std::endl;
-  /*if (set_ == "set1") 
-  { 
-    for (grid_map::GridMapIterator iterator(referenceMap_); !iterator.isPastEnd(); ++iterator) 
-    {
-      grid_map::Index index(*iterator);
-      grid_map::Index shaped_index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
-      grid_map::Index shaped_submap_start_index = grid_map::getIndexFromBufferIndex(submap_start_index, reference_size, reference_start_index);
-      bool outside_submap = (shaped_index(0) < shaped_submap_start_index(0) || shaped_index(1) < shaped_submap_start_index(1) || shaped_index(0) > shaped_submap_start_index(0)+submap_size(0) || shaped_index(1) > shaped_submap_start_index(1)+submap_size(1));
-      if ( outside_submap )
-      {
-        referenceMap_.at("elevation", index) = -0.75;
-      }
-    }
-  }*/
 
   grid_map_msgs::GridMap reference_msg;
   grid_map::GridMapRosConverter::toMessage(referenceMap_, reference_msg);
@@ -334,7 +339,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestSAD != 10 || bestSAD > SADThreshold_)                            // fix for second dataset with empty template update
+      if ((sum == 0.0 || bestSAD > SADThreshold_) && bestSAD != 10)                           // fix for second dataset with empty template update
       {
         particleRowSAD_.clear();
         particleColSAD_.clear();
@@ -466,7 +471,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestSSD != 10 || bestSSD > SSDThreshold_)                            // fix for second dataset with empty template update
+      if ((sum == 0.0 || bestSSD > SSDThreshold_) && bestSSD != 10)                            // fix for second dataset with empty template update
       {
         particleRowSSD_.clear();
         particleColSSD_.clear();
@@ -598,7 +603,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestNCC != -1 || bestNCC < NCCThreshold_)                            // fix for second dataset with empty template update
+      if ((sum == 0.0 || bestNCC < NCCThreshold_) && bestNCC != -1)                           // fix for second dataset with empty template update
       {
         particleRowNCC_.clear();
         particleColNCC_.clear();
@@ -734,7 +739,7 @@ void MapFitter::exhaustiveSearch()
           else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if (sum == 0.0 && bestMI != -10 || bestMI < MIThreshold_)                            // fix for second dataset with empty template update
+      if ((sum == 0.0 || bestMI < MIThreshold_) && bestMI != -10 )                           // fix for second dataset with empty template update
       {
         particleRowMI_.clear();
         particleColMI_.clear();
@@ -1100,6 +1105,7 @@ float MapFitter::weightedMutualInformation()
   float entropy = 0;
   float referenceEntropy = 0;
   float jointEntropy = 0;
+  float weightSum = 0;
 
   for (int i = 0; i < numberOfBins; i++)
   {
@@ -1108,10 +1114,15 @@ float MapFitter::weightedMutualInformation()
 
     for (int j = 0; j < numberOfBins; j++)
     {
-      if (jointHist[i][j]!=0.0) { jointEntropy += -float(abs(i-j)+1)/12*jointHist[i][j]*log(jointHist[i][j]); }
+      if (jointHist[i][j]!=0.0) 
+      { 
+        jointEntropy += -jointHist[i][j]*log(jointHist[i][j]);
+        weightSum += (numberOfBins-abs(i-j))*(numberOfBins-abs(i-j))*jointHist[i][j];
+      }
     }
   }
-
+  jointEntropy = jointEntropy / ( weightSum / (numberOfBins*numberOfBins) );
+  
   duration1_ += ros::Time::now() - time1;
 
   //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;

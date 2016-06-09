@@ -45,7 +45,7 @@ public:
    	 */
   	void callback(const grid_map_msgs::GridMap& message);
 
-    void exhaustiveSearch();
+    void exhaustiveSearch(grid_map::Index submap_start_index, grid_map::Size submap_size);
 
     float findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data, float x, float y, int theta);
     bool findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, grid_map::Index reference_index, float sin_theta, float cos_theta);
@@ -86,7 +86,7 @@ private:
   	ros::NodeHandle& nodeHandle_;
 
   	//! Topic name of the grid map to be matched.
- 	  std::string mapTopic_;
+ 	std::string mapTopic_;
 
     //! Topic name of the grid map to be matched to.
     std::string referenceMapTopic_;
@@ -108,22 +108,24 @@ private:
     //! If the grid map visualization is subscribed to the grid map.
     bool isActive_;
 
-    bool initializeSAD_;
-    bool initializeSSD_;
-    bool initializeNCC_;
-    bool initializeMI_;
-
 
     std::string set_;
-    bool SAD_; 
-    bool SSD_;
-    bool NCC_;
-    bool MI_;
 
     bool weighted_;
 
     bool resample_;
 
+    bool SAD_; 
+    bool SSD_;
+    bool NCC_;
+    bool MI_;
+
+    bool initializeSAD_;
+    bool initializeSSD_;
+    bool initializeNCC_;
+    bool initializeMI_;
+
+    
     //! ROS subscriber to the grid map.
     ros::Subscriber mapSubscriber_;
 
@@ -135,23 +137,14 @@ private:
 
 
     int angleIncrement_;
-
-
     int searchIncrement_;
-
-
-    int correlationIncrement_;
-    
+    int correlationIncrement_;   
 
     float requiredOverlap_;
 
-
     float NCCThreshold_;
-
     float SSDThreshold_;
-
     float SADThreshold_;
-
     float MIThreshold_;
 
 
