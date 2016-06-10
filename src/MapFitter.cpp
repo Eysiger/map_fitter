@@ -335,11 +335,11 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     //referenceMap_.getPosition(grid_map::Index(particleRowSAD_[bestSADparticle], particleColSAD_[bestSADparticle]), best_pos);
     //float bestXSAD = best_pos(0);
     //float bestYSAD = best_pos(1);
-    int bestRow = int(round(particleRowSAD_[bestSADparticle]/subresolution)) % rows;
-    int bestCol = int(round(particleColSAD_[bestSADparticle]/subresolution)) % cols;
+    int bestRow = int(round(float(particleRowSAD_[bestSADparticle])/subresolution)) % rows;
+    int bestCol = int(round(float(particleColSAD_[bestSADparticle])/subresolution)) % cols;
     referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
-    float bestXSAD = best_pos(0) - ( particleRowSAD_[bestSADparticle]-int(round(particleRowSAD_[bestSADparticle])) )*referenceMap_.getResolution()/subresolution; 
-    float bestYSAD = best_pos(1) - ( particleColSAD_[bestSADparticle]-int(round(particleColSAD_[bestSADparticle])) )*referenceMap_.getResolution()/subresolution;
+    float bestXSAD = best_pos(0) - ( float(particleRowSAD_[bestSADparticle])/subresolution-int(round(float(particleRowSAD_[bestSADparticle])/subresolution)) )*referenceMap_.getResolution(); 
+    float bestYSAD = best_pos(1) - ( float(particleColSAD_[bestSADparticle])/subresolution-int(round(float(particleColSAD_[bestSADparticle])/subresolution)) )*referenceMap_.getResolution();
     int bestThetaSAD = particleThetaSAD_[bestSADparticle];
 
     // Calculate z alignement
@@ -471,11 +471,11 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     //referenceMap_.getPosition(grid_map::Index(particleRowSSD_[bestSSDparticle], particleColSSD_[bestSSDparticle]), best_pos);
     //float bestXSSD = best_pos(0);
     //float bestYSSD = best_pos(1);
-    int bestRow = int(round(particleRowSSD_[bestSSDparticle]/subresolution)) % rows;
-    int bestCol = int(round(particleColSSD_[bestSSDparticle]/subresolution)) % cols;
+    int bestRow = int(round(float(particleRowSSD_[bestSSDparticle])/subresolution)) % rows;
+    int bestCol = int(round(float(particleColSSD_[bestSSDparticle])/subresolution)) % cols;
     referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
-    float bestXSSD = best_pos(0) - ( particleRowSSD_[bestSSDparticle]-int(round(particleRowSSD_[bestSSDparticle])) )*referenceMap_.getResolution()/subresolution; 
-    float bestYSSD = best_pos(1) - ( particleColSSD_[bestSSDparticle]-int(round(particleColSSD_[bestSSDparticle])) )*referenceMap_.getResolution()/subresolution;
+    float bestXSSD = best_pos(0) - ( float(particleRowSSD_[bestSSDparticle])/subresolution-int(round(float(particleRowSSD_[bestSSDparticle])/subresolution)) )*referenceMap_.getResolution(); 
+    float bestYSSD = best_pos(1) - ( float(particleColSSD_[bestSSDparticle])/subresolution-int(round(float(particleColSSD_[bestSSDparticle])/subresolution)) )*referenceMap_.getResolution();
     int bestThetaSSD = particleThetaSSD_[bestSSDparticle];
 
     // Calculate z alignement
@@ -607,11 +607,11 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     //referenceMap_.getPosition(grid_map::Index(particleRowNCC_[bestNCCparticle], particleColNCC_[bestNCCparticle]), best_pos);
     //float bestXNCC = best_pos(0);
     //float bestYNCC = best_pos(1);
-    int bestRow = int(round(particleRowNCC_[bestNCCparticle]/subresolution)) % rows;
-    int bestCol = int(round(particleColNCC_[bestNCCparticle]/subresolution)) % cols;
+    int bestRow = int(round(float(particleRowNCC_[bestNCCparticle])/subresolution)) % rows;
+    int bestCol = int(round(float(particleColNCC_[bestNCCparticle])/subresolution)) % cols;
     referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
-    float bestXNCC = best_pos(0) - ( particleRowNCC_[bestNCCparticle]-int(round(particleRowNCC_[bestNCCparticle])) )*referenceMap_.getResolution()/subresolution; 
-    float bestYNCC = best_pos(1) - ( particleColNCC_[bestNCCparticle]-int(round(particleColNCC_[bestNCCparticle])) )*referenceMap_.getResolution()/subresolution;
+    float bestXNCC = best_pos(0) - ( float(particleRowNCC_[bestNCCparticle])/subresolution-int(round(float(particleRowNCC_[bestNCCparticle])/subresolution)) )*referenceMap_.getResolution(); 
+    float bestYNCC = best_pos(1) - ( float(particleColNCC_[bestNCCparticle])/subresolution-int(round(float(particleColNCC_[bestNCCparticle])/subresolution)) )*referenceMap_.getResolution();
     int bestThetaNCC = particleThetaNCC_[bestNCCparticle];
 
     // Calculate z alignement
@@ -747,11 +747,11 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     //referenceMap_.getPosition(grid_map::Index(particleRowMI_[bestMIparticle], particleColMI_[bestMIparticle]), best_pos);
     //float bestXMI = best_pos(0);
     //float bestYMI = best_pos(1);
-    int bestRow = int(round(particleRowMI_[bestMIparticle]/subresolution)) % rows;
-    int bestCol = int(round(particleColMI_[bestMIparticle]/subresolution)) % cols;
+    int bestRow = int(round(float(particleRowMI_[bestMIparticle])/subresolution)) % rows;
+    int bestCol = int(round(float(particleColMI_[bestMIparticle])/subresolution)) % cols;
     referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
-    float bestXMI = best_pos(0) - ( particleRowMI_[bestMIparticle]-int(round(particleRowMI_[bestMIparticle])) )*referenceMap_.getResolution()/subresolution; 
-    float bestYMI = best_pos(1) - ( particleColMI_[bestMIparticle]-int(round(particleColMI_[bestMIparticle])) )*referenceMap_.getResolution()/subresolution;
+    float bestXMI = best_pos(0) - ( float(particleRowMI_[bestMIparticle])/subresolution-int(round(float(particleRowMI_[bestMIparticle])/subresolution)) )*referenceMap_.getResolution(); 
+    float bestYMI = best_pos(1) - ( float(particleColMI_[bestMIparticle])/subresolution-int(round(float(particleColMI_[bestMIparticle])/subresolution)) )*referenceMap_.getResolution();
     int bestThetaMI = particleThetaMI_[bestMIparticle];
 
     // Calculate z alignement
