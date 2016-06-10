@@ -20,9 +20,7 @@ MapFitter::MapFitter(ros::NodeHandle& nodeHandle)
   shiftedPublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>(shiftedMapTopic_,1);   // publisher for shifted_map
   correlationPublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>(correlationMapTopic_,1);    // publisher for correlation_map
   referencePublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>("/uav_elevation_mapping/uav_elevation_map",1); // change back to referenceMapTopic_
-  activityCheckTimer_ = nodeHandle_.createTimer(activityCheckDuration_,
-                                                &MapFitter::updateSubscriptionCallback,
-                                                this);
+  activityCheckTimer_ = nodeHandle_.createTimer(activityCheckDuration_, &MapFitter::updateSubscriptionCallback, this);
   broadcastTimer_ = nodeHandle_.createTimer(ros::Duration(0.01), &MapFitter::tfBroadcast, this);
   listenerTimer_  = nodeHandle_.createTimer(ros::Duration(0.01), &MapFitter::tfListener, this);
   corrPointPublisher_ = nodeHandle_.advertise<geometry_msgs::PointStamped>("/corrPoint",1);
@@ -57,11 +55,20 @@ bool MapFitter::readParameters()
   nodeHandle_.param("position_increment_search", searchIncrement_, 5);
   nodeHandle_.param("position_increment_correlation", correlationIncrement_, 5);
   nodeHandle_.param("required_overlap", requiredOverlap_, float(0.25));
-  nodeHandle_.param("SAD_threshold", SADThreshold_, float(0.05));
-  nodeHandle_.param("SSD_threshold", SSDThreshold_, float(0.008));
-  nodeHandle_.param("NCC_threshold", NCCThreshold_, float(0.65));
-  nodeHandle_.param("MI_threshold", MIThreshold_, float(0));
-
+  if (weighted_)
+  {
+    nodeHandle_.param("SAD_threshold", SADThreshold_, float(0.05));
+    nodeHandle_.param("SSD_threshold", SSDThreshold_, float(0.008));
+    nodeHandle_.param("NCC_threshold", NCCThreshold_, float(0.65));
+    nodeHandle_.param("MI_threshold", MIThreshold_, float(0));
+  }
+  else
+  {
+    nodeHandle_.param("SAD_threshold", SADThreshold_, float(10));
+    nodeHandle_.param("SSD_threshold", SSDThreshold_, float(10));
+    nodeHandle_.param("NCC_threshold", NCCThreshold_, float(0.65));
+    nodeHandle_.param("MI_threshold", MIThreshold_, float(0));
+  }
   double activityCheckRate;
   nodeHandle_.param("activity_check_rate", activityCheckRate, 1.0);
   activityCheckDuration_.fromSec(1.0 / activityCheckRate);
@@ -276,6 +283,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     //templateRotation_ = fmod(templateRotation_ + distribution(generator_)/2 + 360, 360);
   }
 
+  ros::Time pubTime = ros::Time::now();
   if (SAD_)
   {
     std::vector<float> SAD;
@@ -331,7 +339,6 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
     // Calculate z alignement
     float z = findZ(data, reference_data, bestXSAD, bestYSAD, bestThetaSAD);
-    ros::Time pubTime = ros::Time::now();
     if (bestSAD != 10) 
     {
       cumulativeErrorSAD_ += sqrt((bestXSAD - map_position_(0))*(bestXSAD - map_position_(0)) + (bestYSAD - map_position_(1))*(bestYSAD - map_position_(1)));
@@ -463,7 +470,6 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
     // Calculate z alignement
     float z = findZ(data, reference_data, bestXSSD, bestYSSD, bestThetaSSD);
-    ros::Time pubTime = ros::Time::now();
     if (bestSSD != 10) 
     {
       cumulativeErrorSSD_ += sqrt((bestXSSD - map_position_(0))*(bestXSSD - map_position_(0)) + (bestYSSD - map_position_(1))*(bestYSSD - map_position_(1)));
@@ -595,7 +601,6 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
     // Calculate z alignement
     float z = findZ(data, reference_data, bestXNCC, bestYNCC, bestThetaNCC);
-    ros::Time pubTime = ros::Time::now();
     if (bestNCC != -1) 
     {
       cumulativeErrorCorr_ += sqrt((bestXNCC - map_position_(0))*(bestXNCC - map_position_(0)) + (bestYNCC - map_position_(1))*(bestYNCC - map_position_(1)));
@@ -731,7 +736,6 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
     // Calculate z alignement
     float z = findZ(data, reference_data, bestXMI, bestYMI, bestThetaMI);
-    ros::Time pubTime = ros::Time::now();
     if (bestMI != -10) 
     {
       cumulativeErrorMI_ += sqrt((bestXMI - map_position_(0))*(bestXMI - map_position_(0)) + (bestYMI - map_position_(1))*(bestYMI - map_position_(1)));
@@ -942,6 +946,7 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
             xy_shifted_.push_back(mapHeight);
             xy_reference_.push_back(referenceHeight);
             float mapVariance = variance_data(index_x, index_y);
+            if (mapVariance < 1e-6) { mapVariance = 1e-6; }
             xy_shifted_var_.push_back(mapVariance);
           }
         }
@@ -1142,10 +1147,7 @@ float MapFitter::weightedMutualInformation()
 
 void MapFitter::tfBroadcast(const ros::TimerEvent&) 
 {
-  broadcaster_.sendTransform(
-      tf::StampedTransform(
-        tf::Transform(tf::Quaternion(0, 0, 0, 1), tf::Vector3(0.0, 0.0, 0.0)), 
-          ros::Time::now(),"/map", "/grid_map"));
+  broadcaster_.sendTransform( tf::StampedTransform( tf::Transform(tf::Quaternion(0, 0, 0, 1), tf::Vector3(0.0, 0.0, 0.0)), ros::Time::now(),"/map", "/grid_map"));
 }
 
 void MapFitter::tfListener(const ros::TimerEvent&)
