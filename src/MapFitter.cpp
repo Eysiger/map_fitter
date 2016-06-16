@@ -672,7 +672,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         beta.clear();
         for (int i = 0; i < particleRowNCC_.size(); i++)
         {
-          beta.push_back(exp(NCC[i]/0.05));
+          beta.push_back(exp(NCC[i]/0.1));
           //  if (NCC[i] > 0.75*bestNCC) { beta.push_back(NCC[i]-0.75*bestNCC); }
           //  else { beta.push_back(0.0); }
         }
@@ -1233,7 +1233,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       beta.clear();
       for (int i = 0; i < particleRowNCC_.size(); i++)
       {
-        beta.push_back(exp(NCC[i]/0.05));
+        beta.push_back(exp(NCC[i]/0.1));
         //  if (NCC[i] > 0.75*bestNCC) { beta.push_back(NCC[i]-0.75*bestNCC); }
         //  else { beta.push_back(0.0); }
       }
