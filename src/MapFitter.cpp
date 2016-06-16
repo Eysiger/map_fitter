@@ -112,10 +112,10 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
     grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
     referenceMap_.move(grid_map::Position(2.75,1));
 
-    //grid_map::GridMap extendMap;
-    //extendMap.setGeometry(grid_map::Length(10.5,7.5), referenceMap_.getResolution(), referenceMap_.getPosition());
-    //extendMap.setFrameId("grid_map");
-    //referenceMap_.extendToInclude(extendMap);
+    grid_map::GridMap extendMap;
+    extendMap.setGeometry(grid_map::Length(10.5,7.5), referenceMap_.getResolution(), referenceMap_.getPosition());
+    extendMap.setFrameId("grid_map");
+    referenceMap_.extendToInclude(extendMap);
 
     referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
 
@@ -127,10 +127,10 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
       grid_map::Index index(*iterator);
       grid_map::Index shaped_index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
       grid_map::Index shaped_submap_start_index = grid_map::getIndexFromBufferIndex(submap_start_index, reference_size, reference_start_index);
-      bool outside_submap = (shaped_index(0) < shaped_submap_start_index(0)-0 || shaped_index(1) < shaped_submap_start_index(1)-0 || shaped_index(0) > shaped_submap_start_index(0)+submap_size(0)+0 || shaped_index(1) > shaped_submap_start_index(1)+submap_size(1)+0);
+      bool outside_submap = (shaped_index(0) < shaped_submap_start_index(0)-20 || shaped_index(1) < shaped_submap_start_index(1)-15 || shaped_index(0) > shaped_submap_start_index(0)+submap_size(0)+0 || shaped_index(1) > shaped_submap_start_index(1)+submap_size(1)+0);
       if ( outside_submap )
       {
-        referenceMap_.at("elevation", index) = -0.75; //static_cast <float> (rand()) / static_cast <float> (RAND_MAX) -1;
+        referenceMap_.at("elevation", index) = -0.75 + static_cast <float> (rand()) / static_cast <float> (RAND_MAX)/20;
       }
     }
 
@@ -1431,7 +1431,7 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
   if (matches_ > points*requiredOverlap_) 
   { 
     //assure that we always have the same number of points
-    for (int f =0; f < size_x*size_y; f++)
+    /*for (int f =0; f < size_x*size_y; f++)
     {
       int index_x = round(static_cast <float> (rand() / static_cast <float> (RAND_MAX/(size_x-1)))); //rand() %size_x;
       int index_y = round(static_cast <float> (rand() / static_cast <float> (RAND_MAX/(size_y-1)))); //rand() %size_y;
@@ -1465,13 +1465,13 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
         }
       }
       if (matches_ == points)
-      {
+      {*/
         shifted_mean_ = shifted_mean_/matches_;
         reference_mean_ = reference_mean_/matches_;
         return true; 
-      }
+      /*}
     }
-    return false;
+    return false;*/
   }
   else { return false; }
 }
@@ -1612,16 +1612,28 @@ float MapFitter::weightedMutualInformation()
   float maxHeight = map_max_ - shifted_mean_;
   if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
 
-  const int numberOfBins = 128; //128
+  int numberOfBins = ceil((maxHeight - minHeight)/0.03); //128
 
   float binWidth = (maxHeight - minHeight + 1e-6) / numberOfBins;
-  float hist[numberOfBins] = {0.0};
-  float referenceHist[numberOfBins] = {0.0};
-  float jointHist[numberOfBins][numberOfBins] = {0.0};
+
+  std::vector <float> hist;
+  std::vector <float> referenceHist;
+  std::vector< std::vector <float> > jointHist;
+  hist.clear();
+  referenceHist.clear();
+  jointHist.clear();
+  for (int i = 0; i < numberOfBins; i++)
+  {
+    hist.push_back(0.0);
+    referenceHist.push_back(0.0);
+  }
+  for (int i = 0; i < numberOfBins; i++)
+  {
+    jointHist.push_back(hist);
+  }
 
   for (int i = 0; i < matches_; i++)
   {
-
     int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
     int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
     hist[i1] += 1.0/matches_;
@@ -1645,138 +1657,17 @@ float MapFitter::weightedMutualInformation()
       if (jointHist[i][j]!=0.0) 
       { 
         jointEntropy += -jointHist[i][j]*log2(jointHist[i][j]);
-        weightSum += (numberOfBins-abs(i-j))*(numberOfBins-abs(i-j))*jointHist[i][j]; //
-
+        weightSum += (numberOfBins-abs(i-j))*jointHist[i][j]; //*(numberOfBins-abs(i-j))
         //jointEntropy += -float(abs(i-j))/12*jointHist[i][j]*log(jointHist[i][j]);
         //weightSum += float(abs(i-j));
         //count++;
       }
     }
   }
-  jointEntropy = jointEntropy / ( weightSum / (numberOfBins*numberOfBins) ); //
+  jointEntropy = jointEntropy / ( weightSum / (numberOfBins) ); //*numberOfBins
   //std::cout << " Mutual information: " << entropy+referenceEntropy-jointEntropy << " mean weight " << weightSum/count << std::endl;
   //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
-  return (entropy+referenceEntropy-jointEntropy)/sqrt(entropy*referenceEntropy); //-jointEntropy;*/
-
-  //Renyi entropy
-  /*float minHeight = map_min_ - shifted_mean_;
-  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
-
-  float maxHeight = map_max_ - shifted_mean_;
-  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
-
-  const int numberOfBins = 128; //128
-
-  float binWidth = (maxHeight - minHeight + 1e-6) / numberOfBins;
-  float hist[numberOfBins] = {0.0};
-  float referenceHist[numberOfBins] = {0.0};
-  float jointHist[numberOfBins][numberOfBins] = {0.0};
-
-  for (int i = 0; i < matches_; i++)
-  {
-
-    int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
-    int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
-    hist[i1] += 1.0/matches_;
-    referenceHist[i2] += 1.0/matches_;
-    jointHist[i1][i2] += 1.0/matches_;
-  }
-  float alpha = 1.1;
-  float Ei = 0;
-  float Ej = 0;
-  float Eij = 0;
-  for (int i = 0; i < numberOfBins; i++)
-  {
-    Ei += pow(hist[i], alpha);
-    Ej += pow(referenceHist[i], alpha);
-    for (int j = 0; j < numberOfBins; j++)
-    {
-      Eij += pow(jointHist[i][j], alpha);
-    }
-  }
-  Ei = log2(Ei)/(1-alpha);
-  Ej = log2(Ej)/(1-alpha);
-  Eij = log2(Eij)/(1-alpha);
-
-  std::cout << Ei << " " << Ej << " " << Eij << " " << (Ei+Ej)/Eij << " ";
-  return (Ei+Ej)/Eij;*/
-
-  //Tsallis entropy
-  /*float minHeight = map_min_ - shifted_mean_;
-  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
-
-  float maxHeight = map_max_ - shifted_mean_;
-  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
-
-  const int numberOfBins = 128; //128
-
-  float binWidth = (maxHeight - minHeight + 1e-6) / numberOfBins;
-  float hist[numberOfBins] = {0.0};
-  float referenceHist[numberOfBins] = {0.0};
-  float jointHist[numberOfBins][numberOfBins] = {0.0};
-
-  for (int i = 0; i < matches_; i++)
-  {
-
-    int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
-    int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
-    hist[i1] += 1.0/matches_;
-    referenceHist[i2] += 1.0/matches_;
-    jointHist[i1][i2] += 1.0/matches_;
-  }
-  float Si = 0;
-  float Sj = 0;
-  float q = 0.9;
-  float S = 1;
-  for (int i = 0; i < numberOfBins; i++)
-  {
-    Si += 1.0/(q-1)*(hist[i]-pow(hist[i], q));
-    Sj += 1.0/(q-1)*(referenceHist[i]-pow(referenceHist[i], q));
-    for (int j = 0; j < numberOfBins; j++)
-    {
-      S += -pow(jointHist[i][j], q);
-    }
-  }
-  S = S/(q-1);
-  std::cout << Si << " " << Sj << " " << S << " " << Si+Sj-(1-q)*Si*Sj-S << " ";
-  return Si+Sj+(1-q)*Si*Sj-S;*/
-
-  // correlation ratio
-  /*float minHeight = map_min_ - shifted_mean_;
-  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
-
-  float maxHeight = map_max_ - shifted_mean_;
-  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
-
-  const int numberOfBins = 32;
-
-  float binWidth = (maxHeight - minHeight + 1e-6) / numberOfBins;
-  float mi[numberOfBins] = {0.0};
-  int ni[numberOfBins] = {0};
-  float sigma = 0;
-  float sigmaY =0;
-  float mean = 0;
-
-  for (int i = 0; i < matches_; i++)
-  {
-    int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
-    int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
-    mi[i1] += float(i2);
-    mean += float(i2);
-    ni[i1] += 1;
-  }
-  mean = mean/matches_;
-  for (int i = 0; i < matches_; i++)
-  {
-    int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
-    int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
-    sigma += (float(i2)-float(mi[i1])/ni[i1])*(float(i2)-float(mi[i1])/ni[i1]);///xy_shifted_var_[i];
-    sigmaY += (float(i2)-mean)*(float(i2)-mean);///xy_shifted_var_[i];
-  }
-  sigmaY = sigmaY/matches_;
-
-  std::cout << sigma << " " << sigmaY << " " << matches_ << " ";
-  return sqrt(1-(1.0/matches_)*sigma/sigmaY);*/
+  return (entropy+referenceEntropy)/jointEntropy;// /(entropy+referenceEntropy); // /jointEntropy; // /sqrt(entropy*referenceEntropy); //-jointEntropy;
 }
 
 void MapFitter::tfBroadcast(const ros::TimerEvent&) 
