@@ -38,7 +38,7 @@ bool MapFitter::readParameters()
 {
   set_ = "set1";
   weighted_ = true;
-  resample_ = false;
+  resample_ = true;
 
   SAD_ = true;
   SSD_ = true;
@@ -113,7 +113,7 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
     referenceMap_.move(grid_map::Position(2.75,1));
 
     grid_map::GridMap extendMap;
-    extendMap.setGeometry(grid_map::Length(10.5,7.5), referenceMap_.getResolution(), referenceMap_.getPosition());
+    extendMap.setGeometry(grid_map::Length(10.5,8.5), referenceMap_.getResolution(), referenceMap_.getPosition());
     extendMap.setFrameId("grid_map");
     referenceMap_.extendToInclude(extendMap);
 
@@ -127,7 +127,7 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
       grid_map::Index index(*iterator);
       grid_map::Index shaped_index = grid_map::getIndexFromBufferIndex(index, reference_size, reference_start_index);
       grid_map::Index shaped_submap_start_index = grid_map::getIndexFromBufferIndex(submap_start_index, reference_size, reference_start_index);
-      bool outside_submap = (shaped_index(0) < shaped_submap_start_index(0)-20 || shaped_index(1) < shaped_submap_start_index(1)-15 || shaped_index(0) > shaped_submap_start_index(0)+submap_size(0)+0 || shaped_index(1) > shaped_submap_start_index(1)+submap_size(1)+0);
+      bool outside_submap = (shaped_index(0) < shaped_submap_start_index(0)-10 || shaped_index(1) < shaped_submap_start_index(1)-15 || shaped_index(0) > shaped_submap_start_index(0)+submap_size(0)+0 || shaped_index(1) > shaped_submap_start_index(1)+submap_size(1)+0);
       if ( outside_submap )
       {
         referenceMap_.at("elevation", index) = -0.75 + static_cast <float> (rand()) / static_cast <float> (RAND_MAX)/20;
@@ -294,8 +294,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
   ros::Time time1 = ros::Time::now();
   if ((resample_ || !(SAD_ && SSD_ && NCC_ && MI_)) && !initialized_all)
   {
-    if (particleRowSAD_.size() < 4000) { correlationIncrement_ = 2; }
-    else { correlationIncrement_ = 5; }
+    //if (particleRowSAD_.size() < 4000) { correlationIncrement_ = 2; }
+    //else { correlationIncrement_ = 5; }
     if (SAD_)
     {
       std::vector<float> SAD;
@@ -374,8 +374,9 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         beta.clear();
         for (int i = 0; i < particleRowSAD_.size(); i++)
         {
-            if (SAD[i] <= 1.25*bestSAD) { beta.push_back(1.25*bestSAD-SAD[i]); }
-            else { beta.push_back(0.0); }
+            beta.push_back(exp(-SAD[i]/0.01));
+            //if (SAD[i] <= 1.25*bestSAD) { beta.push_back(1.25*bestSAD-SAD[i]); }
+            //else { beta.push_back(0.0); }
         }
         float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
         if ((sum == 0.0 || bestSAD > SADThreshold_) && bestSAD != 10)                           // fix for second dataset with empty template update
@@ -393,8 +394,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
           std::vector< std::vector<int> > newParticles;
           newParticles.clear();
-          int numberOfParticles = particleRowSAD_.size();
-          if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+          int numberOfParticles = 4000;//particleRowSAD_.size();
+          //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
           for (int i = 0; i < numberOfParticles; i++)
           {
             float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
@@ -408,6 +409,16 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
             particle.push_back( int(particleThetaSAD_[ind] + round(distribution(generator_)) + 360) % 360);
             newParticles.push_back(particle);
           }
+          /*numberOfParticles = 1000;
+          for (int i = 0; i < numberOfParticles; i++)
+          {
+            std::vector<int> particle;
+            particle.clear();
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
+            newParticles.push_back(particle);
+          }*/
           
           std::sort(newParticles.begin(), newParticles.end());
           auto last = std::unique(newParticles.begin(), newParticles.end());
@@ -432,8 +443,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     duration1_ += ros::Time::now() - time1;
     ros::Time time2 = ros::Time::now();
 
-    if (particleRowSSD_.size() < 4000) { correlationIncrement_ = 2; }
-    else { correlationIncrement_ = 5; }
+    //if (particleRowSSD_.size() < 4000) { correlationIncrement_ = 2; }
+    //else { correlationIncrement_ = 5; }
     if (SSD_)
     {
       std::vector<float> SSD;
@@ -512,8 +523,9 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         beta.clear();
         for (int i = 0; i < particleRowSSD_.size(); i++)
         {
-            if (SSD[i] <= 1.25*bestSSD) { beta.push_back(1.25*bestSSD-SSD[i]); }
-            else { beta.push_back(0.0); }
+          beta.push_back(exp(-SSD[i]/0.001));
+          //  if (SSD[i] <= 1.25*bestSSD) { beta.push_back(1.25*bestSSD-SSD[i]); }
+          //  else { beta.push_back(0.0); }
         }
         float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
         if ((sum == 0.0 || bestSSD > SSDThreshold_) && bestSSD != 10)                            // fix for second dataset with empty template update
@@ -531,8 +543,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
           std::vector< std::vector<int> > newParticles;
           newParticles.clear();
-          int numberOfParticles = particleRowSSD_.size();
-          if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+          int numberOfParticles = 4000; //particleRowSSD_.size();
+          //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
           for (int i = 0; i < numberOfParticles; i++)
           {
             float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
@@ -546,6 +558,16 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
             particle.push_back( int(particleThetaSSD_[ind] + round(distribution(generator_)) + 360) % 360);
             newParticles.push_back(particle);
           }
+          /*numberOfParticles = 1000;
+          for (int i = 0; i < numberOfParticles; i++)
+          {
+            std::vector<int> particle;
+            particle.clear();
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
+            newParticles.push_back(particle);
+          }*/
           
           std::sort(newParticles.begin(), newParticles.end());
           auto last = std::unique(newParticles.begin(), newParticles.end());
@@ -570,8 +592,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     duration2_ += ros::Time::now() - time2;
     ros::Time time3 = ros::Time::now();
 
-    if (particleRowNCC_.size() < 4000) { correlationIncrement_ = 2; }
-    else { correlationIncrement_ = 5; }
+    //if (particleRowNCC_.size() < 4000) { correlationIncrement_ = 2; }
+    //else { correlationIncrement_ = 5; }
     if (NCC_)
     {
       std::vector<float> NCC;
@@ -650,8 +672,9 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         beta.clear();
         for (int i = 0; i < particleRowNCC_.size(); i++)
         {
-            if (NCC[i] > 0.75*bestNCC) { beta.push_back(NCC[i]-0.75*bestNCC); }
-            else { beta.push_back(0.0); }
+          beta.push_back(exp(NCC[i]/0.05));
+          //  if (NCC[i] > 0.75*bestNCC) { beta.push_back(NCC[i]-0.75*bestNCC); }
+          //  else { beta.push_back(0.0); }
         }
         float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
         if ((sum == 0.0 || bestNCC < NCCThreshold_) && bestNCC != -1)                           // fix for second dataset with empty template update
@@ -669,8 +692,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
           std::vector< std::vector<int> > newParticles;
           newParticles.clear();
-          int numberOfParticles = particleRowNCC_.size();
-          if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+          int numberOfParticles = 4000; //particleRowNCC_.size();
+          //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
           for (int i = 0; i < numberOfParticles; i++)
           {
             float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
@@ -684,6 +707,16 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
             particle.push_back( int(particleThetaNCC_[ind] + round(distribution(generator_)) + 360) % 360);
             newParticles.push_back(particle);
           }
+          /*numberOfParticles = 1000;
+          for (int i = 0; i < numberOfParticles; i++)
+          {
+            std::vector<int> particle;
+            particle.clear();
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
+            newParticles.push_back(particle);
+          }*/
           
           std::sort(newParticles.begin(), newParticles.end());
           auto last = std::unique(newParticles.begin(), newParticles.end());
@@ -708,8 +741,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     duration3 = ros::Time::now() - time3;
     ros::Time time4 = ros::Time::now();
 
-    if (particleRowMI_.size() < 4000) { correlationIncrement_ = 2; }
-    else { correlationIncrement_ = 5; }
+    //if (particleRowMI_.size() < 4000) { correlationIncrement_ = 2; }
+    //else { correlationIncrement_ = 5; }
     if (MI_)
     {
       std::vector<float> MI;
@@ -792,7 +825,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         beta.clear();
         for (int i = 0; i < particleRowMI_.size(); i++)
         {
-          if (bestMI > 0)
+          beta.push_back(exp(MI[i]/0.02));
+          /*if (bestMI > 0)
           {
             if (MI[i] > 0.75*bestMI) { beta.push_back(MI[i]-0.75*bestMI); }
             else { beta.push_back(0.0); }
@@ -801,7 +835,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
           {
             if (MI[i] > 1.25*bestMI) { beta.push_back(MI[i]-1.25*bestMI); }
             else { beta.push_back(0.0); }
-          }
+          }*/
         }
         float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
         if ((sum == 0.0 || bestMI < MIThreshold_) && bestMI != -10 )                           // fix for second dataset with empty template update
@@ -819,8 +853,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
           std::vector< std::vector<int> > newParticles;
           newParticles.clear();
-          int numberOfParticles = particleRowMI_.size();
-          if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+          int numberOfParticles = 4000; //particleRowMI_.size();
+          //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
           for (int i = 0; i < numberOfParticles; i++)
           {
             float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
@@ -834,6 +868,16 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
             particle.push_back( int(particleThetaMI_[ind] + round(distribution(generator_)) + 360) % 360);
             newParticles.push_back(particle);
           }
+          /*numberOfParticles = 1000;
+          for (int i = 0; i < numberOfParticles; i++)
+          {
+            std::vector<int> particle;
+            particle.clear();
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
+            particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
+            newParticles.push_back(particle);
+          }*/
           
           std::sort(newParticles.begin(), newParticles.end());
           auto last = std::unique(newParticles.begin(), newParticles.end());
@@ -1055,8 +1099,9 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       beta.clear();
       for (int i = 0; i < particleRowSAD_.size(); i++)
       {
-          if (SAD[i] <= 1.25*bestSAD) { beta.push_back(1.25*bestSAD-SAD[i]); }
-          else { beta.push_back(0.0); }
+        beta.push_back(exp(-SAD[i]/0.01));
+        //  if (SAD[i] <= 1.25*bestSAD) { beta.push_back(1.25*bestSAD-SAD[i]); }
+        //  else { beta.push_back(0.0); }
       }
       float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
       if ((sum == 0.0 || bestSAD > SADThreshold_) && bestSAD != 10)                           // fix for second dataset with empty template update
@@ -1074,8 +1119,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
         std::vector< std::vector<int> > newParticles;
         newParticles.clear();
-        int numberOfParticles = particleRowSAD_.size();
-        if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        int numberOfParticles = 4000; //particleRowSAD_.size();
+        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
         for (int i = 0; i < numberOfParticles; i++)
         {
           float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
@@ -1089,6 +1134,16 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
           particle.push_back( int(particleThetaSAD_[ind] + round(distribution(generator_)) + 360) % 360);
           newParticles.push_back(particle);
         }
+        /*numberOfParticles = 1000;
+        for (int i = 0; i < numberOfParticles; i++)
+        {
+          std::vector<int> particle;
+          particle.clear();
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
+          newParticles.push_back(particle);
+        }*/
         
         std::sort(newParticles.begin(), newParticles.end());
         auto last = std::unique(newParticles.begin(), newParticles.end());
@@ -1111,8 +1166,9 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       beta.clear();
       for (int i = 0; i < particleRowSSD_.size(); i++)
       {
-          if (SSD[i] <= 1.25*bestSSD) { beta.push_back(1.25*bestSSD-SSD[i]); }
-          else { beta.push_back(0.0); }
+        beta.push_back(exp(-SSD[i]/0.001));
+         // if (SSD[i] <= 1.25*bestSSD) { beta.push_back(1.25*bestSSD-SSD[i]); }
+         // else { beta.push_back(0.0); }
       }
       sum = std::accumulate(beta.begin(), beta.end(), 0.0);
       if ((sum == 0.0 || bestSSD > SSDThreshold_) && bestSSD != 10)                            // fix for second dataset with empty template update
@@ -1130,8 +1186,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
         std::vector< std::vector<int> > newParticles;
         newParticles.clear();
-        int numberOfParticles = particleRowSSD_.size();
-        if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        int numberOfParticles = 4000; //particleRowSSD_.size();
+        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
         for (int i = 0; i < numberOfParticles; i++)
         {
           float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
@@ -1145,6 +1201,16 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
           particle.push_back( int(particleThetaSSD_[ind] + round(distribution(generator_)) + 360) % 360);
           newParticles.push_back(particle);
         }
+        /*numberOfParticles = 1000;
+        for (int i = 0; i < numberOfParticles; i++)
+        {
+          std::vector<int> particle;
+          particle.clear();
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
+          newParticles.push_back(particle);
+        }*/
         
         std::sort(newParticles.begin(), newParticles.end());
         auto last = std::unique(newParticles.begin(), newParticles.end());
@@ -1167,8 +1233,9 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       beta.clear();
       for (int i = 0; i < particleRowNCC_.size(); i++)
       {
-          if (NCC[i] > 0.75*bestNCC) { beta.push_back(NCC[i]-0.75*bestNCC); }
-          else { beta.push_back(0.0); }
+        beta.push_back(exp(NCC[i]/0.05));
+        //  if (NCC[i] > 0.75*bestNCC) { beta.push_back(NCC[i]-0.75*bestNCC); }
+        //  else { beta.push_back(0.0); }
       }
       sum = std::accumulate(beta.begin(), beta.end(), 0.0);
       if ((sum == 0.0 || bestNCC < NCCThreshold_) && bestNCC != -1)                           // fix for second dataset with empty template update
@@ -1186,8 +1253,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
         std::vector< std::vector<int> > newParticles;
         newParticles.clear();
-        int numberOfParticles = particleRowNCC_.size();
-        if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        int numberOfParticles = 4000; //particleRowNCC_.size();
+        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
         for (int i = 0; i < numberOfParticles; i++)
         {
           float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
@@ -1201,6 +1268,16 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
           particle.push_back( int(particleThetaNCC_[ind] + round(distribution(generator_)) + 360) % 360);
           newParticles.push_back(particle);
         }
+        /*numberOfParticles = 1000;
+        for (int i = 0; i < numberOfParticles; i++)
+        {
+          std::vector<int> particle;
+          particle.clear();
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
+          newParticles.push_back(particle);
+        }*/
         
         std::sort(newParticles.begin(), newParticles.end());
         auto last = std::unique(newParticles.begin(), newParticles.end());
@@ -1223,7 +1300,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       beta.clear();
       for (int i = 0; i < particleRowMI_.size(); i++)
       {
-        if (bestMI > 0)
+        beta.push_back(exp(MI[i]/0.02));
+        /*if (bestMI > 0)
         {
           if (MI[i] > 0.75*bestMI) { beta.push_back(MI[i]-0.75*bestMI); }
           else { beta.push_back(0.0); }
@@ -1232,7 +1310,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         {
           if (MI[i] > 1.25*bestMI) { beta.push_back(MI[i]-1.25*bestMI); }
           else { beta.push_back(0.0); }
-        }
+        }*/
       }
       sum = std::accumulate(beta.begin(), beta.end(), 0.0);
       if ((sum == 0.0 || bestMI < MIThreshold_) && bestMI != -10 )                           // fix for second dataset with empty template update
@@ -1250,8 +1328,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
 
         std::vector< std::vector<int> > newParticles;
         newParticles.clear();
-        int numberOfParticles = particleRowMI_.size();
-        if (numberOfParticles < 4000) { numberOfParticles = 4000; }
+        int numberOfParticles = 4000; //particleRowMI_.size();
+        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
         for (int i = 0; i < numberOfParticles; i++)
         {
           float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
@@ -1265,6 +1343,16 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
           particle.push_back( int(particleThetaMI_[ind] + round(distribution(generator_)) + 360) % 360);
           newParticles.push_back(particle);
         }
+        /*numberOfParticles = 1000;
+        for (int i = 0; i < numberOfParticles; i++)
+        {
+          std::vector<int> particle;
+          particle.clear();
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
+          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
+          newParticles.push_back(particle);
+        }*/
         
         std::sort(newParticles.begin(), newParticles.end());
         auto last = std::unique(newParticles.begin(), newParticles.end());
@@ -1564,18 +1652,31 @@ float MapFitter::weightedCorrelationNCC()
 
 float MapFitter::mutualInformation()
 {
-  const int numberOfBins = 128;
-
   float minHeight = map_min_ - shifted_mean_;
   if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
 
   float maxHeight = map_max_ - shifted_mean_;
   if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
 
+  int numberOfBins = ceil((maxHeight - minHeight)/0.03); //128
+
   float binWidth = (maxHeight - minHeight + 1e-6) / numberOfBins;
-  float hist[numberOfBins] = {0.0};
-  float referenceHist[numberOfBins] = {0.0};
-  float jointHist[numberOfBins][numberOfBins] = {0.0};
+
+  std::vector <float> hist;
+  std::vector <float> referenceHist;
+  std::vector< std::vector <float> > jointHist;
+  hist.clear();
+  referenceHist.clear();
+  jointHist.clear();
+  for (int i = 0; i < numberOfBins; i++)
+  {
+    hist.push_back(0.0);
+    referenceHist.push_back(0.0);
+  }
+  for (int i = 0; i < numberOfBins; i++)
+  {
+    jointHist.push_back(hist);
+  }
 
   for (int i = 0; i < matches_; i++)
   {
@@ -1585,23 +1686,28 @@ float MapFitter::mutualInformation()
     referenceHist[i2] += 1.0/matches_;
     jointHist[i1][i2] += 1.0/matches_;
   }
-  
+
   float entropy = 0;
   float referenceEntropy = 0;
   float jointEntropy = 0;
+  //int count = 0;
 
   for (int i = 0; i < numberOfBins; i++)
   {
-    if (hist[i]!=0.0) {entropy += -hist[i]*log(hist[i]);}
-    if (referenceHist[i]!=0.0) {referenceEntropy += -referenceHist[i]*log(referenceHist[i]);}
+    if (hist[i]!=0.0) { entropy += -hist[i]*log2(hist[i]); }
+    if (referenceHist[i]!=0.0) { referenceEntropy += -referenceHist[i]*log2(referenceHist[i]); }
 
     for (int j = 0; j < numberOfBins; j++)
     {
-      if (jointHist[i][j]!=0.0) {jointEntropy += -jointHist[i][j]*log(jointHist[i][j]);}
+      if (jointHist[i][j]!=0.0) 
+      { 
+        jointEntropy += -jointHist[i][j]*log2(jointHist[i][j]);
+      }
     }
   }
+  //std::cout << " Mutual information: " << entropy+referenceEntropy-jointEntropy << " mean weight " << weightSum/count << std::endl;
   //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
-  return (entropy+referenceEntropy-jointEntropy);
+  return (entropy+referenceEntropy)/jointEntropy;// /(entropy+referenceEntropy); // /jointEntropy; // /sqrt(entropy*referenceEntropy); //-jointEntropy;
 }
 
 float MapFitter::weightedMutualInformation()
