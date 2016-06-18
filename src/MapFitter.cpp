@@ -36,7 +36,7 @@ MapFitter::~MapFitter()
 
 bool MapFitter::readParameters()
 {
-  set_ = "set1";
+  set_ = "set2";
   weighted_ = true;
   resample_ = true;
 
@@ -377,7 +377,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         beta.clear();
         for (int i = 0; i < particleRowSAD_.size(); i++)
         {
-            beta.push_back(exp(-SAD[i]/0.01));
+            beta.push_back(exp(-SAD[i]/0.0025));
             //if (SAD[i] <= 1.25*bestSAD) { beta.push_back(1.25*bestSAD-SAD[i]); }
             //else { beta.push_back(0.0); }
         }
@@ -526,7 +526,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         beta.clear();
         for (int i = 0; i < particleRowSSD_.size(); i++)
         {
-          beta.push_back(exp(-SSD[i]/0.001));
+          beta.push_back(exp(-SSD[i]/0.0005));
           //  if (SSD[i] <= 1.25*bestSSD) { beta.push_back(1.25*bestSSD-SSD[i]); }
           //  else { beta.push_back(0.0); }
         }
@@ -1102,7 +1102,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       beta.clear();
       for (int i = 0; i < particleRowSAD_.size(); i++)
       {
-        beta.push_back(exp(-SAD[i]/0.01));
+        beta.push_back(exp(-SAD[i]/0.0025));
         //  if (SAD[i] <= 1.25*bestSAD) { beta.push_back(1.25*bestSAD-SAD[i]); }
         //  else { beta.push_back(0.0); }
       }
@@ -1169,7 +1169,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       beta.clear();
       for (int i = 0; i < particleRowSSD_.size(); i++)
       {
-        beta.push_back(exp(-SSD[i]/0.001));
+        beta.push_back(exp(-SSD[i]/0.0005));
          // if (SSD[i] <= 1.25*bestSSD) { beta.push_back(1.25*bestSSD-SSD[i]); }
          // else { beta.push_back(0.0); }
       }
