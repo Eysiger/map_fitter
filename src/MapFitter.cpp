@@ -36,7 +36,7 @@ MapFitter::~MapFitter()
 
 bool MapFitter::readParameters()
 {
-  set_ = "set2";
+  set_ = "set1";
   weighted_ = true;
   resample_ = true;
 
@@ -109,7 +109,7 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
   grid_map::Size submap_size;
   if (set_ == "set1")
   { 
-    grid_map::GridMapRosConverter::loadFromBag("/home/roman/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
+    grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
     referenceMap_.move(grid_map::Position(2.75,1));
 
     grid_map::GridMap extendMap;
@@ -141,13 +141,16 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
   
   if (set_ == "set2") 
   { 
-    grid_map::GridMapRosConverter::loadFromBag("/home/roman/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_); 
+    grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_); 
 
     grid_map_msgs::GridMap reference_msg;
     grid_map::GridMapRosConverter::toMessage(referenceMap_, reference_msg);
     referencePublisher_.publish(reference_msg);
     
     referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
+
+    submap_start_index = grid_map::Index((submap_start_index(0) + 20 + referenceMap_.getSize()(0) ) % referenceMap_.getSize()(0), (submap_start_index(1) + 20 + referenceMap_.getSize()(1) ) % referenceMap_.getSize()(1));
+    submap_size = submap_size - grid_map::Size(40,40);
   }
 
   exhaustiveSearch(submap_start_index, submap_size);
@@ -672,7 +675,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         beta.clear();
         for (int i = 0; i < particleRowNCC_.size(); i++)
         {
-          beta.push_back(exp(NCC[i]/0.1));
+          beta.push_back(exp(NCC[i]/0.025));
           //  if (NCC[i] > 0.75*bestNCC) { beta.push_back(NCC[i]-0.75*bestNCC); }
           //  else { beta.push_back(0.0); }
         }
@@ -952,7 +955,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         grid_map::Position xy_position;
         referenceMap_.getPosition(index, xy_position);
         if (correlationMap.isInside(xy_position-shift))
-        {-shift
+        {
           grid_map::Index correlation_index;
           correlationMap.getIndex(xy_position-shift, correlation_index);
 
@@ -1233,7 +1236,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       beta.clear();
       for (int i = 0; i < particleRowNCC_.size(); i++)
       {
-        beta.push_back(exp(NCC[i]/0.1));
+        beta.push_back(exp(NCC[i]/0.025));
         //  if (NCC[i] > 0.75*bestNCC) { beta.push_back(NCC[i]-0.75*bestNCC); }
         //  else { beta.push_back(0.0); }
       }
