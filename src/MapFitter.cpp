@@ -183,7 +183,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
   grid_map::Matrix& variance_data = map_["variance"];
 
   tf::StampedTransform correct_position;
-  try { listener_.lookupTransform("/map", "/footprint", ros::Time(0), correct_position); }
+  try { listener_.lookupTransform("/map", "/base", ros::Time(0), correct_position); }
   catch (tf::TransformException ex) { ROS_ERROR("%s",ex.what()); }
   tf::Matrix3x3 m(correct_position.getRotation());
   double roll, pitch, yaw;
@@ -297,8 +297,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
   ros::Time time1 = ros::Time::now();
   if ((resample_ || !(SAD_ && SSD_ && NCC_ && MI_)) && !initialized_all)
   {
-    //if (particleRowSAD_.size() < 4000) { correlationIncrement_ = 2; }
-    //else { correlationIncrement_ = 5; }
+    if (particleRowSAD_.size() < 4000) { correlationIncrement_ = 2; }
+    else { correlationIncrement_ = 5; }
     if (SAD_)
     {
       std::vector<float> SAD;
@@ -446,8 +446,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     duration1_ += ros::Time::now() - time1;
     ros::Time time2 = ros::Time::now();
 
-    //if (particleRowSSD_.size() < 4000) { correlationIncrement_ = 2; }
-    //else { correlationIncrement_ = 5; }
+    if (particleRowSSD_.size() < 4000) { correlationIncrement_ = 2; }
+    else { correlationIncrement_ = 5; }
     if (SSD_)
     {
       std::vector<float> SSD;
@@ -595,8 +595,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     duration2_ += ros::Time::now() - time2;
     ros::Time time3 = ros::Time::now();
 
-    //if (particleRowNCC_.size() < 4000) { correlationIncrement_ = 2; }
-    //else { correlationIncrement_ = 5; }
+    if (particleRowNCC_.size() < 4000) { correlationIncrement_ = 2; }
+    else { correlationIncrement_ = 5; }
     if (NCC_)
     {
       std::vector<float> NCC;
@@ -744,8 +744,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     duration3 = ros::Time::now() - time3;
     ros::Time time4 = ros::Time::now();
 
-    //if (particleRowMI_.size() < 4000) { correlationIncrement_ = 2; }
-    //else { correlationIncrement_ = 5; }
+    if (particleRowMI_.size() < 4000) { correlationIncrement_ = 2; }
+    else { correlationIncrement_ = 5; }
     if (MI_)
     {
       std::vector<float> MI;
@@ -765,7 +765,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         float sin_theta = sin((theta+templateRotation_)/180*M_PI);
         float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
-        bool success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
+        bool success = findMatchesEqual(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
         if (success) 
         {
           float mutInfo;
@@ -915,8 +915,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       float sin_theta = sin((theta+templateRotation_)/180*M_PI);
       float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
-      bool success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
-      if (success) 
+      bool success = findMatchesEqual(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
+      if (success)
       {
         float errSAD;
         if (!weighted_) { errSAD = errorSAD(); }
@@ -1501,6 +1501,80 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
   // check if required overlap is fulfilled
   if (matches_ > points*requiredOverlap_) 
   { 
+    shifted_mean_ = shifted_mean_/matches_;
+    reference_mean_ = reference_mean_/matches_;
+    return true; 
+  }
+  else { return false; }
+}
+
+bool MapFitter::findMatchesEqual(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, float row, float col, float sin_theta, float cos_theta)
+{
+  // initialize
+  int points = 0;
+  matches_ = 0;
+
+  shifted_mean_ = 0;
+  reference_mean_ = 0;
+  xy_shifted_.clear();
+  xy_reference_.clear();
+  xy_shifted_var_.clear();
+
+  Eigen::Array2i size = map_.getSize();
+  int size_x = size(0);
+  int size_y = size(1);
+  Eigen::Array2i start_index = map_.getStartIndex();
+  int start_index_x = start_index(0);
+  int start_index_y = start_index(1);
+  Eigen::Array2i reference_size = referenceMap_.getSize();
+  int reference_size_x = reference_size(0);
+  int reference_size_y = reference_size(1);
+  Eigen::Array2i reference_start_index = referenceMap_.getStartIndex();
+  int reference_start_index_x = reference_start_index(0);
+  int reference_start_index_y = reference_start_index(1);
+  float reference_index_x = row; //reference_index(0);
+  float reference_index_y = col; //reference_index(1);
+
+  for (int i = 0; i <= size_x-correlationIncrement_; i += correlationIncrement_)
+  {
+    for (int j = 0; j<= size_y-correlationIncrement_; j += correlationIncrement_)
+    {
+      int index_x = (start_index_x + i) % size_x;
+      int index_y = (start_index_y + j) % size_y;
+
+      float mapHeight = data(index_x, index_y);
+      if (mapHeight == mapHeight)
+      {
+        points += 1;
+        float reference_buffer_index_x = reference_size_x - reference_start_index_x + reference_index_x;
+        float reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
+
+        int shifted_index_x = round(fmod(reference_buffer_index_x, reference_size_x) - (cos_theta*(float(size_x)/2-i) - sin_theta*(float(size_y)/2-j)) );
+        int shifted_index_y = round(fmod(reference_buffer_index_y, reference_size_y) - (sin_theta*(float(size_x)/2-i) + cos_theta*(float(size_y)/2-j)) );
+              
+        if (shifted_index_x >= 0 && shifted_index_x < reference_size_x && shifted_index_y >= 0 && shifted_index_y < reference_size_y )
+        {
+          shifted_index_x = (shifted_index_x + reference_start_index_x) % reference_size_x;
+          shifted_index_y = (shifted_index_y + reference_start_index_y) % reference_size_y;
+          float referenceHeight = reference_data(shifted_index_x, shifted_index_y);
+          if (referenceHeight == referenceHeight)
+          {
+            matches_ += 1;
+            shifted_mean_ += mapHeight;
+            reference_mean_ += referenceHeight;
+            xy_shifted_.push_back(mapHeight);
+            xy_reference_.push_back(referenceHeight);
+            float mapVariance = variance_data(index_x, index_y);
+            if (mapVariance < 1e-6) { mapVariance = 1e-6; }
+            xy_shifted_var_.push_back(mapVariance);
+          }
+        }
+      }
+    }
+  }
+  // check if required overlap is fulfilled
+  if (matches_ > points*requiredOverlap_) 
+  { 
     //assure that we always have the same number of points
     for (int f =0; f < size_x*size_y; f++)
     {
@@ -1775,7 +1849,7 @@ void MapFitter::tfBroadcast(const ros::TimerEvent&)
 void MapFitter::tfListener(const ros::TimerEvent&)
 {
   tf::StampedTransform position;
-  try { listener_.lookupTransform("/map", "/footprint", ros::Time(0), position); }
+  try { listener_.lookupTransform("/map", "/base", ros::Time(0), position); }
   catch (tf::TransformException ex) { //ROS_ERROR("%s",ex.what()); 
   return; }
   tf::Matrix3x3 m(position.getRotation());
