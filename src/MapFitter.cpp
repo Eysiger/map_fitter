@@ -109,7 +109,7 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
   grid_map::Size submap_size;
   if (set_ == "set1")
   { 
-    grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
+    grid_map::GridMapRosConverter::loadFromBag("/home/roman/rosbags/reference_map_last.bag", referenceMapTopic_, referenceMap_);
     referenceMap_.move(grid_map::Position(2.75,1));
 
     grid_map::GridMap extendMap;
@@ -141,7 +141,7 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
   
   if (set_ == "set2") 
   { 
-    grid_map::GridMapRosConverter::loadFromBag("/home/parallels/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_); 
+    grid_map::GridMapRosConverter::loadFromBag("/home/roman/rosbags/source/asl_walking_uav/uav_reference_map.bag", referenceMapTopic_, referenceMap_); 
 
     grid_map_msgs::GridMap reference_msg;
     grid_map::GridMapRosConverter::toMessage(referenceMap_, reference_msg);
@@ -149,8 +149,8 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
     
     referenceMap_.getDataBoundingSubmap("elevation", submap_start_index, submap_size);
 
-    submap_start_index = grid_map::Index((submap_start_index(0) + 20 + referenceMap_.getSize()(0) ) % referenceMap_.getSize()(0), (submap_start_index(1) + 20 + referenceMap_.getSize()(1) ) % referenceMap_.getSize()(1));
-    submap_size = submap_size - grid_map::Size(40,40);
+    submap_start_index = grid_map::Index((submap_start_index(0) + 50 + referenceMap_.getSize()(0) ) % referenceMap_.getSize()(0), (submap_start_index(1) + 20 + referenceMap_.getSize()(1) ) % referenceMap_.getSize()(1));
+    submap_size = submap_size - grid_map::Size(125,40);
   }
 
   exhaustiveSearch(submap_start_index, submap_size);
@@ -526,7 +526,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         beta.clear();
         for (int i = 0; i < particleRowSSD_.size(); i++)
         {
-          beta.push_back(exp(-SSD[i]/0.0005));
+          beta.push_back(exp(-SSD[i]/0.0004));
           //  if (SSD[i] <= 1.25*bestSSD) { beta.push_back(1.25*bestSSD-SSD[i]); }
           //  else { beta.push_back(0.0); }
         }
@@ -828,17 +828,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
         beta.clear();
         for (int i = 0; i < particleRowMI_.size(); i++)
         {
-          beta.push_back(exp(MI[i]/0.02));
-          /*if (bestMI > 0)
-          {
-            if (MI[i] > 0.75*bestMI) { beta.push_back(MI[i]-0.75*bestMI); }
-            else { beta.push_back(0.0); }
-          }
-          else 
-          {
-            if (MI[i] > 1.25*bestMI) { beta.push_back(MI[i]-1.25*bestMI); }
-            else { beta.push_back(0.0); }
-          }*/
+          beta.push_back(exp((MI[i]-1)/0.015));
         }
         float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
         if ((sum == 0.0 || bestMI < MIThreshold_) && bestMI != -10 )                           // fix for second dataset with empty template update
@@ -1169,7 +1159,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       beta.clear();
       for (int i = 0; i < particleRowSSD_.size(); i++)
       {
-        beta.push_back(exp(-SSD[i]/0.0005));
+        beta.push_back(exp(-SSD[i]/0.0004));
          // if (SSD[i] <= 1.25*bestSSD) { beta.push_back(1.25*bestSSD-SSD[i]); }
          // else { beta.push_back(0.0); }
       }
@@ -1303,17 +1293,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       beta.clear();
       for (int i = 0; i < particleRowMI_.size(); i++)
       {
-        beta.push_back(exp(MI[i]/0.02));
-        /*if (bestMI > 0)
-        {
-          if (MI[i] > 0.75*bestMI) { beta.push_back(MI[i]-0.75*bestMI); }
-          else { beta.push_back(0.0); }
-        }
-        else 
-        {
-          if (MI[i] > 1.25*bestMI) { beta.push_back(MI[i]-1.25*bestMI); }
-          else { beta.push_back(0.0); }
-        }*/
+        beta.push_back(exp((MI[i]-1)/0.015));
       }
       sum = std::accumulate(beta.begin(), beta.end(), 0.0);
       if ((sum == 0.0 || bestMI < MIThreshold_) && bestMI != -10 )                           // fix for second dataset with empty template update
@@ -1522,7 +1502,7 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
   if (matches_ > points*requiredOverlap_) 
   { 
     //assure that we always have the same number of points
-    /*for (int f =0; f < size_x*size_y; f++)
+    for (int f =0; f < size_x*size_y; f++)
     {
       int index_x = round(static_cast <float> (rand() / static_cast <float> (RAND_MAX/(size_x-1)))); //rand() %size_x;
       int index_y = round(static_cast <float> (rand() / static_cast <float> (RAND_MAX/(size_y-1)))); //rand() %size_y;
@@ -1556,13 +1536,13 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
         }
       }
       if (matches_ == points)
-      {*/
+      {
         shifted_mean_ = shifted_mean_/matches_;
         reference_mean_ = reference_mean_/matches_;
         return true; 
-      /*}
+      }
     }
-    return false;*/
+    return false;
   }
   else { return false; }
 }
@@ -1655,11 +1635,11 @@ float MapFitter::weightedCorrelationNCC()
 
 float MapFitter::mutualInformation()
 {
-  float minHeight = map_min_ - shifted_mean_;
-  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
+  float minHeight = map_min_;
+  if (reference_min_ < minHeight) { minHeight = reference_min_; }
 
-  float maxHeight = map_max_ - shifted_mean_;
-  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
+  float maxHeight = map_max_;
+  if (reference_max_ > maxHeight) { maxHeight = reference_max_; }
 
   int numberOfBins = ceil((maxHeight - minHeight)/0.03); //128
 
@@ -1683,8 +1663,8 @@ float MapFitter::mutualInformation()
 
   for (int i = 0; i < matches_; i++)
   {
-    int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
-    int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
+    int i1 = (xy_shifted_[i] - minHeight) / binWidth;
+    int i2 = (xy_reference_[i] - minHeight) / binWidth;
     hist[i1] += 1.0/matches_;
     referenceHist[i2] += 1.0/matches_;
     jointHist[i1][i2] += 1.0/matches_;
@@ -1715,13 +1695,19 @@ float MapFitter::mutualInformation()
 
 float MapFitter::weightedMutualInformation()
 {
-  float minHeight = map_min_ - shifted_mean_;
+  /*float minHeight = map_min_ - shifted_mean_;
   if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
 
   float maxHeight = map_max_ - shifted_mean_;
-  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }
+  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }*/
 
-  int numberOfBins = ceil((maxHeight - minHeight)/0.03); //128
+  float minHeight = map_min_;
+  if (reference_min_ < minHeight) { minHeight = reference_min_; }
+
+  float maxHeight = map_max_;
+  if (reference_max_ > maxHeight) { maxHeight = reference_max_; }
+
+  int numberOfBins = ceil((maxHeight - minHeight)/0.08); //128
 
   float binWidth = (maxHeight - minHeight + 1e-6) / numberOfBins;
 
@@ -1743,8 +1729,10 @@ float MapFitter::weightedMutualInformation()
 
   for (int i = 0; i < matches_; i++)
   {
-    int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
-    int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
+    //int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
+    //int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
+    int i1 = (xy_shifted_[i] - minHeight) / binWidth;
+    int i2 = (xy_reference_[i] - minHeight) / binWidth;
     hist[i1] += 1.0/matches_;
     referenceHist[i2] += 1.0/matches_;
     jointHist[i1][i2] += 1.0/matches_;
@@ -1773,7 +1761,7 @@ float MapFitter::weightedMutualInformation()
       }
     }
   }
-  jointEntropy = jointEntropy / ( weightSum / (numberOfBins) ); //*numberOfBins
+  //jointEntropy = jointEntropy / ( weightSum / (numberOfBins) ); //*numberOfBins
   //std::cout << " Mutual information: " << entropy+referenceEntropy-jointEntropy << " mean weight " << weightSum/count << std::endl;
   //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
   return (entropy+referenceEntropy)/jointEntropy;// /(entropy+referenceEntropy); // /jointEntropy; // /sqrt(entropy*referenceEntropy); //-jointEntropy;
