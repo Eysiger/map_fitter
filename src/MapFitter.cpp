@@ -538,408 +538,138 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       calculateSimilarity(success,"MI",index,theta,MI,correlationMap,shift);
     }
 
-    std::vector<float> bestPos;
-    bestPos.clear();
-    bestPos = findBestPos("SAD", SAD, subresolution);
-    float bestXSAD = bestPos[0];
-    float bestYSAD = bestPos[1];
-    int bestThetaSAD = bestPos[2];
-    float bestSAD = bestPos[3];
+    std::vector<float> bestPosSAD;
+    bestPosSAD.clear();
+    bestPosSAD = findBestPos("SAD", SAD, subresolution);
 
-    bestPos.clear();
-    bestPos = findBestPos("SSD", SSD, subresolution);
-    float bestXSSD = bestPos[0];
-    float bestYSSD = bestPos[1];
-    int bestThetaSSD = bestPos[2];
-    float bestSSD = bestPos[3];
+    std::vector<float> bestPosSSD;
+    bestPosSSD.clear();
+    bestPosSSD = findBestPos("SSD", SSD, subresolution);
 
-    bestPos.clear();
-    bestPos = findBestPos("NCC", NCC, subresolution);
-    float bestXNCC = bestPos[0];
-    float bestYNCC = bestPos[1];
-    int bestThetaNCC = bestPos[2];
-    float bestNCC = bestPos[3];
+    std::vector<float> bestPosNCC;
+    bestPosNCC.clear();
+    bestPosNCC = findBestPos("NCC", NCC, subresolution);
 
-    bestPos.clear();
-    bestPos = findBestPos("MI", MI, subresolution);
-    float bestXMI = bestPos[0];
-    float bestYMI = bestPos[1];
-    int bestThetaMI = bestPos[2];
-    float bestMI = bestPos[3];
-
-    /*  // search best score 
-    grid_map::Position best_pos;
-
-    std::vector<float>::iterator SADit = std::min_element(SAD.begin(), SAD.end());
-    int bestSADparticle = std::distance(SAD.begin(), SADit);
-    float bestSAD = SAD[bestSADparticle];
-    int bestRow = int(round(float(particleRowSAD_[bestSADparticle])/subresolution)) % rows;
-    int bestCol = int(round(float(particleColSAD_[bestSADparticle])/subresolution)) % cols;
-    referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
-    float bestXSAD = best_pos(0) - ( float(particleRowSAD_[bestSADparticle])/subresolution-int(round(float(particleRowSAD_[bestSADparticle])/subresolution)) )*referenceMap_.getResolution(); 
-    float bestYSAD = best_pos(1) - ( float(particleColSAD_[bestSADparticle])/subresolution-int(round(float(particleColSAD_[bestSADparticle])/subresolution)) )*referenceMap_.getResolution();
-    int bestThetaSAD = particleThetaSAD_[bestSADparticle];
-
-    std::vector<float>::iterator SSDit = std::min_element(SSD.begin(), SSD.end());
-    int bestSSDparticle = std::distance(SSD.begin(), SSDit);
-    float bestSSD = SSD[bestSSDparticle];
-    int bestRow = int(round(float(particleRowSSD_[bestSSDparticle])/subresolution)) % rows;
-    int bestCol = int(round(float(particleColSSD_[bestSSDparticle])/subresolution)) % cols;
-    referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
-    float bestXSSD = best_pos(0) - ( float(particleRowSSD_[bestSSDparticle])/subresolution-int(round(float(particleRowSSD_[bestSSDparticle])/subresolution)) )*referenceMap_.getResolution(); 
-    float bestYSSD = best_pos(1) - ( float(particleColSSD_[bestSSDparticle])/subresolution-int(round(float(particleColSSD_[bestSSDparticle])/subresolution)) )*referenceMap_.getResolution();
-    int bestThetaSSD = particleThetaSSD_[bestSSDparticle];
-
-    std::vector<float>::iterator NCCit = std::max_element(NCC.begin(), NCC.end());
-    int bestNCCparticle = std::distance(NCC.begin(), NCCit);
-    float bestNCC = NCC[bestNCCparticle];
-    bestRow = int(round(float(particleRowNCC_[bestNCCparticle])/subresolution)) % rows;
-    bestCol = int(round(float(particleColNCC_[bestNCCparticle])/subresolution)) % cols;
-    referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
-    float bestXNCC = best_pos(0) - ( float(particleRowNCC_[bestNCCparticle])/subresolution-int(round(float(particleRowNCC_[bestNCCparticle])/subresolution)) )*referenceMap_.getResolution(); 
-    float bestYNCC = best_pos(1) - ( float(particleColNCC_[bestNCCparticle])/subresolution-int(round(float(particleColNCC_[bestNCCparticle])/subresolution)) )*referenceMap_.getResolution();
-    int bestThetaNCC = particleThetaNCC_[bestNCCparticle];
-
-    std::vector<float>::iterator MIit = std::max_element(MI.begin(), MI.end());
-    int bestMIparticle = std::distance(MI.begin(), MIit);
-    float bestMI = MI[bestMIparticle];
-    bestRow = int(round(float(particleRowMI_[bestMIparticle])/subresolution)) % rows;
-    bestCol = int(round(float(particleColMI_[bestMIparticle])/subresolution)) % cols;
-    referenceMap_.getPosition(grid_map::Index(bestRow, bestCol), best_pos);
-    float bestXMI = best_pos(0) - ( float(particleRowMI_[bestMIparticle])/subresolution-int(round(float(particleRowMI_[bestMIparticle])/subresolution)) )*referenceMap_.getResolution(); 
-    float bestYMI = best_pos(1) - ( float(particleColMI_[bestMIparticle])/subresolution-int(round(float(particleColMI_[bestMIparticle])/subresolution)) )*referenceMap_.getResolution();
-    int bestThetaMI = particleThetaMI_[bestMIparticle];*/
+    std::vector<float> bestPosMI;
+    bestPosMI.clear();
+    bestPosMI = findBestPos("MI", MI, subresolution);
 
     // Calculate z alignement
-    float z = findZ(data, reference_data, bestXSAD, bestYSAD, bestThetaSAD);
-    if (bestSAD != 10) 
+    float z = findZ(data, reference_data, bestPosSAD[0], bestPosSAD[1], bestPosSAD[2]);
+    if (bestPosSAD[3] != noneSAD_) 
     {
-      cumulativeErrorSAD_ += sqrt((bestXSAD - map_position_(0))*(bestXSAD - map_position_(0)) + (bestYSAD - map_position_(1))*(bestYSAD - map_position_(1)));
-      if (sqrt((bestXSAD - map_position_(0))*(bestXSAD - map_position_(0)) + (bestYSAD - map_position_(1))*(bestYSAD - map_position_(1))) < 0.5 && (fabs(bestThetaSAD - (360-templateRotation_)) < angleIncrement_ || fabs(bestThetaSAD - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesSAD_ += 1;}
-      geometry_msgs::PointStamped SADPoint;
-      SADPoint.point.x = bestXSAD - shift(0);
-      SADPoint.point.y = bestYSAD - shift(1);
-      SADPoint.point.z = bestThetaSAD;
-      SADPoint.header.stamp = pubTime;
-      SADPointPublisher_.publish(SADPoint);
+      float distError = sqrt((bestPosSAD[0] - map_position_(0))*(bestPosSAD[0] - map_position_(0)) + (bestPosSAD[1] - map_position_(1))*(bestPosSAD[1] - map_position_(1)) );
+      cumulativeErrorSAD_ += distError;
+      if (distError < 0.5 && (fabs(bestPosSAD[2] - (360-templateRotation_)) < angleIncrement_ || fabs(bestPosSAD[2] - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesSAD_ += 1;}
+      
+      publishPoint("SAD", bestPosSAD, shift, pubTime);
     }
-    std::cout << "Best SAD " << bestSAD << " at " << bestXSAD << ", " << bestYSAD << " , theta " << bestThetaSAD << " and z: " << z << std::endl;
+    std::cout << "Best SAD " << bestPosSAD[3] << " at " << bestPosSAD[0] << ", " << bestPosSAD[1] << " , theta " << bestPosSAD[2] << " and z: " << z << std::endl;
     std::cout << "Cumulative error SAD: " << cumulativeErrorSAD_ << " matches: " << correctMatchesSAD_ << std::endl;
 
-    z = findZ(data, reference_data, bestXSSD, bestYSSD, bestThetaSSD);
-    if (bestSSD != 10) 
+    z = findZ(data, reference_data, bestPosSSD[0], bestPosSSD[1], bestPosSSD[2]);
+    if (bestPosSSD[3] != noneSSD_) 
     {
-      cumulativeErrorSSD_ += sqrt((bestXSSD - map_position_(0))*(bestXSSD - map_position_(0)) + (bestYSSD - map_position_(1))*(bestYSSD - map_position_(1)));
-      if (sqrt((bestXSSD - map_position_(0))*(bestXSSD - map_position_(0)) + (bestYSSD - map_position_(1))*(bestYSSD - map_position_(1))) < 0.5 && (fabs(bestThetaSSD - (360-templateRotation_)) < angleIncrement_ || fabs(bestThetaSSD - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesSSD_ += 1;}
-      geometry_msgs::PointStamped SSDPoint;
-      SSDPoint.point.x = bestXSSD - shift(0);
-      SSDPoint.point.y = bestYSSD - shift(1);
-      SSDPoint.point.z = bestThetaSSD;
-      SSDPoint.header.stamp = pubTime;
-      SSDPointPublisher_.publish(SSDPoint);
+      float distError = sqrt((bestPosSSD[0] - map_position_(0))*(bestPosSSD[0] - map_position_(0)) + (bestPosSSD[1] - map_position_(1))*(bestPosSSD[1] - map_position_(1)) );
+      cumulativeErrorSSD_ += distError;
+      if (distError < 0.5 && (fabs(bestPosSSD[2] - (360-templateRotation_)) < angleIncrement_ || fabs(bestPosSSD[2] - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesSSD_ += 1;}
+
+      publishPoint("SSD", bestPosSSD, shift, pubTime);
     }
-    std::cout << "Best SSD " << bestSSD << " at " << bestXSSD << ", " << bestYSSD << " , theta " << bestThetaSSD << " and z: " << z << std::endl;
+    std::cout << "Best SSD " << bestPosSSD[3] << " at " << bestPosSSD[0] << ", " << bestPosSSD[1] << " , theta " << bestPosSSD[2] << " and z: " << z << std::endl;
     std::cout << "Cumulative error SSD: " << cumulativeErrorSSD_ << " matches: " << correctMatchesSSD_ << std::endl;
 
-    z = findZ(data, reference_data, bestXNCC, bestYNCC, bestThetaNCC);
-    if (bestNCC != -1) 
+    z = findZ(data, reference_data, bestPosNCC[0], bestPosNCC[1], bestPosNCC[2]);
+    if (bestPosNCC[3] != noneNCC_) 
     {
-      cumulativeErrorNCC_ += sqrt((bestXNCC - map_position_(0))*(bestXNCC - map_position_(0)) + (bestYNCC - map_position_(1))*(bestYNCC - map_position_(1)));
-      if (sqrt((bestXNCC - map_position_(0))*(bestXNCC - map_position_(0)) + (bestYNCC - map_position_(1))*(bestYNCC - map_position_(1))) < 0.5 && (fabs(bestThetaNCC - (360-templateRotation_)) < angleIncrement_ || fabs(bestThetaNCC - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesNCC_ += 1;}
-      geometry_msgs::PointStamped corrPoint;
-      corrPoint.point.x = bestXNCC - shift(0);
-      corrPoint.point.y = bestYNCC - shift(1);
-      corrPoint.point.z = bestThetaNCC;
-      corrPoint.header.stamp = pubTime;
-      NCCPointPublisher_.publish(corrPoint);
+      float distError = sqrt((bestPosNCC[0] - map_position_(0))*(bestPosNCC[0] - map_position_(0)) + (bestPosNCC[1] - map_position_(1))*(bestPosNCC[1] - map_position_(1)) );
+      cumulativeErrorNCC_ += distError;
+      if (distError < 0.5 && (fabs(bestPosNCC[2] - (360-templateRotation_)) < angleIncrement_ || fabs(bestPosNCC[2] - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesNCC_ += 1;}
+      
+      publishPoint("NCC", bestPosNCC, shift, pubTime);
     }
-    std::cout << "Best NCC " << bestNCC << " at " << bestXNCC << ", " << bestYNCC << " , theta " << bestThetaNCC << " and z: " << z << std::endl;
+    std::cout << "Best NCC " << bestPosNCC[3] << " at " << bestPosNCC[0] << ", " << bestPosNCC[1] << " , theta " << bestPosNCC[2] << " and z: " << z << std::endl;
     std::cout << "Cumulative error NCC: " << cumulativeErrorNCC_ << " matches: " << correctMatchesNCC_ << std::endl;
 
-    z = findZ(data, reference_data, bestXMI, bestYMI, bestThetaMI);
-    if (bestMI != -10) 
+    z = findZ(data, reference_data, bestPosMI[0], bestPosMI[1], bestPosMI[2]);
+    if (bestPosMI[3] != noneMI_) 
     {
-      cumulativeErrorMI_ += sqrt((bestXMI - map_position_(0))*(bestXMI - map_position_(0)) + (bestYMI - map_position_(1))*(bestYMI - map_position_(1)));
-      if (sqrt((bestXMI - map_position_(0))*(bestXMI - map_position_(0)) + (bestYMI - map_position_(1))*(bestYMI - map_position_(1))) < 0.5 && (fabs(bestThetaMI - (360-templateRotation_)) < angleIncrement_ || fabs(bestThetaMI - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesMI_ += 1;}
-      geometry_msgs::PointStamped MIPoint;
-      MIPoint.point.x = bestXMI - shift(0);
-      MIPoint.point.y = bestYMI - shift(1);
-      MIPoint.point.z = bestThetaMI;
-      MIPoint.header.stamp = pubTime;
-      MIPointPublisher_.publish(MIPoint);
+      float distError = sqrt((bestPosMI[0] - map_position_(0))*(bestPosMI[0] - map_position_(0)) + (bestPosMI[1] - map_position_(1))*(bestPosMI[1] - map_position_(1)) );
+      cumulativeErrorMI_ += distError;
+      if (distError < 0.5 && (fabs(bestPosMI[2] - (360-templateRotation_)) < angleIncrement_ || fabs(bestPosMI[2] - (360-templateRotation_)) > 360-angleIncrement_)) {correctMatchesMI_ += 1;}
+      
+      publishPoint("MI", bestPosMI, shift, pubTime);
     }
-    std::cout << "Best MI " << bestMI << " at " << bestXMI << ", " << bestYMI << " , theta " << bestThetaMI << " and z: " << z << std::endl;
+    std::cout << "Best MI " << bestPosMI[3] << " at " << bestPosMI[0] << ", " << bestPosMI[1] << " , theta " << bestPosMI[2] << " and z: " << z << std::endl;
     std::cout << "Cumulative error MI: " << cumulativeErrorMI_ << " matches: " << correctMatchesMI_ << std::endl;
 
     if (resample_)
     {
       //update & resample particles
-      std::vector<float> beta;
-      beta.clear();
-      for (int i = 0; i < particleRowSAD_.size(); i++)
+      std::vector< std::vector<int> > newParticles;
+      newParticles.clear();
+      newParticles = resample("SAD", bestPosSAD, SAD, distribution, subresolution);
+
+      int numberOfParticles = newParticles.size();
+      particleRowSAD_.clear();
+      particleColSAD_.clear();
+      particleThetaSAD_.clear();
+
+      for (int i = 0; i < numberOfParticles; i++)
       {
-        beta.push_back(exp(-SAD[i]/0.0025));
-        //  if (SAD[i] <= 1.25*bestSAD) { beta.push_back(1.25*bestSAD-SAD[i]); }
-        //  else { beta.push_back(0.0); }
+        particleRowSAD_.push_back(newParticles[i][0]);
+        particleColSAD_.push_back(newParticles[i][1]);
+        particleThetaSAD_.push_back(newParticles[i][2]);
       }
-      float sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if ((sum == 0.0 || bestSAD > SADThreshold_) && bestSAD != 10)                           // fix for second dataset with empty template update
+      std::cout <<"New number of particles SAD: " << numberOfParticles << std::endl;
+
+      newParticles.clear();
+      newParticles = resample("SSD", bestPosSSD, SSD, distribution, subresolution);
+
+      numberOfParticles = newParticles.size();
+      particleRowSSD_.clear();
+      particleColSSD_.clear();
+      particleThetaSSD_.clear();
+
+      for (int i = 0; i < numberOfParticles; i++)
       {
-        particleRowSAD_.clear();
-        particleColSAD_.clear();
-        particleThetaSAD_.clear();
-        initializeSAD_ = true;
-        ROS_INFO("particle Filter SAD reinitialized");
+        particleRowSSD_.push_back(newParticles[i][0]);
+        particleColSSD_.push_back(newParticles[i][1]);
+        particleThetaSSD_.push_back(newParticles[i][2]);
       }
-      else if(bestSAD != 10)
+      std::cout <<"New number of particles SSD: " << numberOfParticles << std::endl;
+
+      newParticles.clear();
+      newParticles = resample("NCC", bestPosNCC, NCC, distribution, subresolution);
+
+      numberOfParticles = newParticles.size();
+      particleRowNCC_.clear();
+      particleColNCC_.clear();
+      particleThetaNCC_.clear();
+
+      for (int i = 0; i < numberOfParticles; i++)
       {
-        std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
-        std::partial_sum(beta.begin(), beta.end(), beta.begin());
-
-        std::vector< std::vector<int> > newParticles;
-        newParticles.clear();
-        int numberOfParticles = 4000; //particleRowSAD_.size();
-        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
-          int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
-
-          std::vector<int> particle;
-          particle.clear();
-
-          particle.push_back( int(particleRowSAD_[ind] + round(distribution(generator_)) + rows*subresolution) % (rows*subresolution) );
-          particle.push_back( int(particleColSAD_[ind] + round(distribution(generator_)) + cols*subresolution) % (cols*subresolution) );
-          particle.push_back( int(particleThetaSAD_[ind] + round(distribution(generator_)) + 360) % 360);
-          newParticles.push_back(particle);
-        }
-        /*numberOfParticles = 1000;
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          std::vector<int> particle;
-          particle.clear();
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
-          newParticles.push_back(particle);
-        }*/
-        
-        std::sort(newParticles.begin(), newParticles.end());
-        auto last = std::unique(newParticles.begin(), newParticles.end());
-        newParticles.erase(last, newParticles.end());
-
-        numberOfParticles = newParticles.size();
-        particleRowSAD_.clear();
-        particleColSAD_.clear();
-        particleThetaSAD_.clear();
-
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          particleRowSAD_.push_back(newParticles[i][0]);
-          particleColSAD_.push_back(newParticles[i][1]);
-          particleThetaSAD_.push_back(newParticles[i][2]);
-        }
-        std::cout <<"New number of particles SAD: " << numberOfParticles << std::endl;
+        particleRowNCC_.push_back(newParticles[i][0]);
+        particleColNCC_.push_back(newParticles[i][1]);
+        particleThetaNCC_.push_back(newParticles[i][2]);
       }
+      std::cout <<"New number of particles NCC: " << numberOfParticles << std::endl;
 
-      beta.clear();
-      for (int i = 0; i < particleRowSSD_.size(); i++)
+      newParticles.clear();
+      newParticles = resample("MI", bestPosMI, MI, distribution, subresolution);
+
+      numberOfParticles = newParticles.size();
+      particleRowMI_.clear();
+      particleColMI_.clear();
+      particleThetaMI_.clear();
+
+      for (int i = 0; i < numberOfParticles; i++)
       {
-        beta.push_back(exp(-SSD[i]/0.0004));
-         // if (SSD[i] <= 1.25*bestSSD) { beta.push_back(1.25*bestSSD-SSD[i]); }
-         // else { beta.push_back(0.0); }
+        particleRowMI_.push_back(newParticles[i][0]);
+        particleColMI_.push_back(newParticles[i][1]);
+        particleThetaMI_.push_back(newParticles[i][2]);
       }
-      sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if ((sum == 0.0 || bestSSD > SSDThreshold_) && bestSSD != 10)                            // fix for second dataset with empty template update
-      {
-        particleRowSSD_.clear();
-        particleColSSD_.clear();
-        particleThetaSSD_.clear();
-        initializeSSD_ = true;
-        ROS_INFO("particle Filter SSD reinitialized");
-      }
-      else if(bestSSD != 10)
-      {
-        std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
-        std::partial_sum(beta.begin(), beta.end(), beta.begin());
-
-        std::vector< std::vector<int> > newParticles;
-        newParticles.clear();
-        int numberOfParticles = 4000; //particleRowSSD_.size();
-        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
-          int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
-
-          std::vector<int> particle;
-          particle.clear();
-
-          particle.push_back( int(particleRowSSD_[ind] + round(distribution(generator_)) + rows*subresolution) % (rows*subresolution) );
-          particle.push_back( int(particleColSSD_[ind] + round(distribution(generator_)) + cols*subresolution) % (cols*subresolution) );
-          particle.push_back( int(particleThetaSSD_[ind] + round(distribution(generator_)) + 360) % 360);
-          newParticles.push_back(particle);
-        }
-        /*numberOfParticles = 1000;
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          std::vector<int> particle;
-          particle.clear();
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
-          newParticles.push_back(particle);
-        }*/
-        
-        std::sort(newParticles.begin(), newParticles.end());
-        auto last = std::unique(newParticles.begin(), newParticles.end());
-        newParticles.erase(last, newParticles.end());
-
-        numberOfParticles = newParticles.size();
-        particleRowSSD_.clear();
-        particleColSSD_.clear();
-        particleThetaSSD_.clear();
-
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          particleRowSSD_.push_back(newParticles[i][0]);
-          particleColSSD_.push_back(newParticles[i][1]);
-          particleThetaSSD_.push_back(newParticles[i][2]);
-        }
-        std::cout <<"New number of particles SSD: " << numberOfParticles << std::endl;
-      }
-
-      beta.clear();
-      for (int i = 0; i < particleRowNCC_.size(); i++)
-      {
-        beta.push_back(exp(NCC[i]/0.025));
-        //  if (NCC[i] > 0.75*bestNCC) { beta.push_back(NCC[i]-0.75*bestNCC); }
-        //  else { beta.push_back(0.0); }
-      }
-      sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if ((sum == 0.0 || bestNCC < NCCThreshold_) && bestNCC != -1)                           // fix for second dataset with empty template update
-      {
-        particleRowNCC_.clear();
-        particleColNCC_.clear();
-        particleThetaNCC_.clear();
-        initializeNCC_ = true;
-        ROS_INFO("particle Filter NCC reinitialized");
-      }
-      else if(sum != 0.0)
-      {
-        std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
-        std::partial_sum(beta.begin(), beta.end(), beta.begin());
-
-        std::vector< std::vector<int> > newParticles;
-        newParticles.clear();
-        int numberOfParticles = 4000; //particleRowNCC_.size();
-        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
-          int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
-
-          std::vector<int> particle;
-          particle.clear();
-
-          particle.push_back( int(particleRowNCC_[ind] + round(distribution(generator_)) + rows*subresolution) % (rows*subresolution) );
-          particle.push_back( int(particleColNCC_[ind] + round(distribution(generator_)) + cols*subresolution) % (cols*subresolution) );
-          particle.push_back( int(particleThetaNCC_[ind] + round(distribution(generator_)) + 360) % 360);
-          newParticles.push_back(particle);
-        }
-        /*numberOfParticles = 1000;
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          std::vector<int> particle;
-          particle.clear();
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
-          newParticles.push_back(particle);
-        }*/
-        
-        std::sort(newParticles.begin(), newParticles.end());
-        auto last = std::unique(newParticles.begin(), newParticles.end());
-        newParticles.erase(last, newParticles.end());
-
-        numberOfParticles = newParticles.size();
-        particleRowNCC_.clear();
-        particleColNCC_.clear();
-        particleThetaNCC_.clear();
-
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          particleRowNCC_.push_back(newParticles[i][0]);
-          particleColNCC_.push_back(newParticles[i][1]);
-          particleThetaNCC_.push_back(newParticles[i][2]);
-        }
-        std::cout <<"New number of particles NCC: " << numberOfParticles << std::endl;
-      }
-
-      beta.clear();
-      for (int i = 0; i < particleRowMI_.size(); i++)
-      {
-        beta.push_back(exp((MI[i]-1)/0.015));
-      }
-      sum = std::accumulate(beta.begin(), beta.end(), 0.0);
-      if ((sum == 0.0 || bestMI < MIThreshold_) && bestMI != -10 )                           // fix for second dataset with empty template update
-      {
-        particleRowMI_.clear();
-        particleColMI_.clear();
-        particleThetaMI_.clear();
-        initializeMI_ = true;
-        ROS_INFO("particle Filter MI reinitialized");
-      }
-      else if(sum != 0.0)
-      {
-        std::transform(beta.begin(), beta.end(), beta.begin(), std::bind1st(std::multiplies<float>(), 1.0/sum));
-        std::partial_sum(beta.begin(), beta.end(), beta.begin());
-
-        std::vector< std::vector<int> > newParticles;
-        newParticles.clear();
-        int numberOfParticles = 4000; //particleRowMI_.size();
-        //if (numberOfParticles < 4000) { numberOfParticles = 4000; }
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          float randNumber = static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * (beta.back()-beta[0]) + beta[0];
-          int ind = std::upper_bound(beta.begin(), beta.end(), randNumber) - beta.begin() -1;
-
-          std::vector<int> particle;
-          particle.clear();
-
-          particle.push_back( int(particleRowMI_[ind] + round(distribution(generator_)) + rows*subresolution) % (rows*subresolution) );
-          particle.push_back( int(particleColMI_[ind] + round(distribution(generator_)) + cols*subresolution) % (cols*subresolution) );
-          particle.push_back( int(particleThetaMI_[ind] + round(distribution(generator_)) + 360) % 360);
-          newParticles.push_back(particle);
-        }
-        /*numberOfParticles = 1000;
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          std::vector<int> particle;
-          particle.clear();
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(0)*subresolution + submap_start_index(0) + rows*subresolution) % (rows*subresolution) );
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * submap_size(1)*subresolution + submap_start_index(1) + cols*subresolution) % (cols*subresolution) );
-          particle.push_back( int(static_cast <float> (rand()) / static_cast <float> (RAND_MAX) * 360 + 360) % (360) );
-          newParticles.push_back(particle);
-        }*/
-        
-        std::sort(newParticles.begin(), newParticles.end());
-        auto last = std::unique(newParticles.begin(), newParticles.end());
-        newParticles.erase(last, newParticles.end());
-
-        numberOfParticles = newParticles.size();
-        particleRowMI_.clear();
-        particleColMI_.clear();
-        particleThetaMI_.clear();
-
-        for (int i = 0; i < numberOfParticles; i++)
-        {
-          particleRowMI_.push_back(newParticles[i][0]);
-          particleColMI_.push_back(newParticles[i][1]);
-          particleThetaMI_.push_back(newParticles[i][2]);
-        }
-        std::cout <<"New number of particles MI: " << numberOfParticles << std::endl;
-      }
+      std::cout <<"New number of particles MI: " << numberOfParticles << std::endl;
     }
   }
 
