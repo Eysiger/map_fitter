@@ -2,15 +2,21 @@ map_topic: /elevation_mapping_long_range/elevation_map
 reference_map_topic: /uav_elevation_mapping/uav_elevation_map
 activity_check_rate: 1.0
 
-shifted_map_topic: /elevation_mapping_long_range/shifted_map
 correlation_map_topic: /correlation_best_rotation/correlation_map
 
 angle_increment: 5
 position_increment_search: 5
 position_increment_correlation: 5
-required_overlap: 0.75
+required_overlap: 0.25
 
 SAD_threshold: 0.05
 SSD_threshold: 0.008
-NCC_threshold: 0.65
+NCC_threshold: 0.60
 MI_threshold:  0
+
+rho_SAD: -0.0025
+rho_SSD: -0.0004
+rho_NCC: 0.025
+rho_MI: 0.015
+
+number_of_particles: 4000

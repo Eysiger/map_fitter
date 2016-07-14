@@ -3,17 +3,17 @@
   <!--<node pkg="grid_map_demos" type="simple_demo" name="grid_map_simple_demo" output="screen" />-->
   <!-- Launch the grid map visualizer -->
   <node pkg="grid_map_visualization" type="grid_map_visualization" name="grid_map_visualization" output="screen">
-    <rosparam command="load" file="$(find grid_map_visualization)/config/visualization.yaml" />
+    <rosparam command="load" file="$(find map_fitter)/grid_map_visualization/config/visualization.yaml" />
   </node>
 <node pkg="grid_map_visualization" type="grid_map_visualization" name="grid_map_visualization1" output="screen">
-    <rosparam command="load" file="$(find grid_map_visualization)/config/visualization1.yaml" />
+    <rosparam command="load" file="$(find map_fitter)/grid_map_visualization/config/visualization1.yaml" />
   </node>
-  <node pkg="grid_map_visualization" type="grid_map_visualization" name="grid_map_visualization2" output="screen">
-    <rosparam command="load" file="$(find grid_map_visualization)/config/visualization2.yaml" />
-  </node>
+ <!-- <node pkg="grid_map_visualization" type="grid_map_visualization" name="grid_map_visualization2" output="screen">
+    <rosparam command="load" file="$(find map_fitter)/grid_map_visualization/config/visualization2.yaml" />
+  </node> -->
   <node pkg="grid_map_visualization" type="grid_map_visualization" name="grid_map_visualization3" output="screen">
-    <rosparam command="load" file="$(find grid_map_visualization)/config/visualization3.yaml" />
+    <rosparam command="load" file="$(find map_fitter)/grid_map_visualization/config/visualization3.yaml" />
   </node>
   <!-- Launch RViz with the demo configuration -->
-  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find grid_map_visualization)/rviz/grid_map4.rviz" />
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(find map_fitter)/grid_map_visualization/rviz/grid_map4.rviz" />
 </launch>

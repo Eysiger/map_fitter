@@ -95,19 +95,16 @@ private:
 
 
     //! ROS nodehandle.
-  	ros::NodeHandle& nodeHandle_;
+    ros::NodeHandle& nodeHandle_;
 
-  	//! Topic name of the grid map to be matched.
- 	std::string mapTopic_;
+    //! Topic name of the grid map to be matched.
+    std::string mapTopic_;
 
     //! Topic name of the grid map to be matched to.
     std::string referenceMapTopic_;
 
 
     std::string correlationMapTopic_;
-
-
-    std::string shiftedMapTopic_;
 
     //! Duration of checking the activity of the visualizations.
     ros::Duration activityCheckDuration_;
@@ -170,9 +167,6 @@ private:
     float reference_min_;
     float reference_max_;
 
-
-    //! Grid map publisher.
-    ros::Publisher shiftedPublisher_;
 
     //! Grid map publisher.
     ros::Publisher correlationPublisher_;

@@ -4,10 +4,22 @@ grid_map_topic: /correlation_best_rotation/correlation_map
 # /uav_elevation_mapping/uav_elevation_map (-)
 
 grid_map_visualizations:
-  - name: elevation_points
+  - name: elevation_NCC
     type: point_cloud
     params:
-     layer: correlation
+     layer: NCC
+  - name: elevation_SAD
+    type: point_cloud
+    params:
+     layer: SAD
+  - name: elevation_SSD
+    type: point_cloud
+    params:
+     layer: SSD
+  - name: elevation_MI
+    type: point_cloud
+    params:
+     layer: MI
   - name: elevation_grid
     type: occupancy_grid
     params:

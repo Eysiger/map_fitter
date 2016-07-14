@@ -17,7 +17,6 @@ MapFitter::MapFitter(ros::NodeHandle& nodeHandle)
   ROS_INFO("Map fitter node started, ready to match some grid maps.");
   readParameters();
   initialization();
-  shiftedPublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>(shiftedMapTopic_,1);   // publisher for shifted_map
   correlationPublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>(correlationMapTopic_,1);    // publisher for correlation_map
   referencePublisher_ = nodeHandle_.advertise<grid_map_msgs::GridMap>("/uav_elevation_mapping/uav_elevation_map",1); // change back to referenceMapTopic_
   activityCheckTimer_ = nodeHandle_.createTimer(activityCheckDuration_, &MapFitter::updateSubscriptionCallback, this);
@@ -45,17 +44,15 @@ bool MapFitter::readParameters()
   NCC_ = true;
   MI_ = true;
 
-  rhoSAD_ = -0.0025;
-  rhoSSD_ = -0.0004;
-  rhoNCC_ = 0.025;
-  rhoMI_ = 0.015;
-
-  numberOfParticles_ = 4000;
+  nodeHandle_.param("rho_SAD", rhoSAD_, float(-0.0025));
+  nodeHandle_.param("rho_SSD", rhoSSD_, float(-0.0004));
+  nodeHandle_.param("rho_NCC", rhoNCC_, float(0.025));
+  nodeHandle_.param("rho_MI", rhoMI_, float(0.015));
+  nodeHandle_.param("number_of_particles", numberOfParticles_, 4000);
 
   nodeHandle_.param("map_topic", mapTopic_, std::string("/elevation_mapping_long_range/elevation_map"));
   if (set_ == "set1") { nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/uav_elevation_mapping/uav_elevation_map")); }
   if (set_ == "set2") { nodeHandle_.param("reference_map_topic", referenceMapTopic_, std::string("/elevation_mapping/elevation_map")); }
-  nodeHandle_.param("shifted_map_topic", shiftedMapTopic_, std::string("/elevation_mapping_long_range/shifted_map"));
   nodeHandle_.param("correlation_map_topic", correlationMapTopic_, std::string("/correlation_best_rotation/correlation_map"));
 
   nodeHandle_.param("angle_increment", angleIncrement_, 5);
@@ -66,8 +63,8 @@ bool MapFitter::readParameters()
   {
     nodeHandle_.param("SAD_threshold", SADThreshold_, float(0.05));
     nodeHandle_.param("SSD_threshold", SSDThreshold_, float(0.008));
-    nodeHandle_.param("NCC_threshold", NCCThreshold_, float(0.60));
-    nodeHandle_.param("MI_threshold", MIThreshold_, float(-1));
+    nodeHandle_.param("NCC_threshold", NCCThreshold_, float(0.6));
+    nodeHandle_.param("MI_threshold", MIThreshold_, float(0));
   }
   else
   {
