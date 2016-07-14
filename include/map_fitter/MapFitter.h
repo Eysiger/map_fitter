@@ -226,7 +226,7 @@ private:
     int noneSAD_ = 10;
     int noneSSD_ = 10;
     int noneNCC_ = -1;
-    int noneMI_ = -10; //change to 0
+    int noneMI_ = 0;
 
     float rhoSAD_;
     float rhoSSD_;
