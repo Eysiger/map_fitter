@@ -48,9 +48,12 @@ public:
 
     void exhaustiveSearch(grid_map::Index submap_start_index, grid_map::Size submap_size);
 
+    void iterateParticles(std::string score, int subresolution, grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, std::vector<float>& scores, grid_map::GridMap& correlationMap, grid_map::Position& shift);
+    void calculateSimilarity(bool success, std::string score, grid_map::Index index, int theta, std::vector<float>& scores, grid_map::GridMap& correlationMap, grid_map::Position& shift);
+
+
     float findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data, float x, float y, int theta);
-    bool findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, float row, float col, float sin_theta, float cos_theta);
-    bool findMatchesEqual(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, float row, float col, float sin_theta, float cos_theta);
+    bool findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, float row, float col, float sin_theta, float cos_theta, bool equal);
 
     float errorSAD();
     float weightedErrorSAD();
@@ -62,7 +65,7 @@ public:
     float weightedCorrelationNCC();
 
     float mutualInformation();
-    float weightedMutualInformation();   
+    float normalizedMutualInformation();   
 
 private:
     /*!
@@ -215,6 +218,10 @@ private:
     std::vector<int> particleColMI_;
     std::vector<int> particleThetaMI_;
 
+    int noneSAD_ = 10;
+    int noneSSD_ = 10;
+    int noneNCC_ = -1;
+    int noneMI_ = -10; //change to 0
 
     ros::Duration duration1_;
     ros::Duration duration2_;

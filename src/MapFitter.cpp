@@ -36,7 +36,7 @@ MapFitter::~MapFitter()
 
 bool MapFitter::readParameters()
 {
-  set_ = "set2";
+  set_ = "set1";
   weighted_ = true;
   resample_ = true;
 
@@ -159,7 +159,7 @@ void MapFitter::callback(const grid_map_msgs::GridMap& message)
 void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::Size submap_size)
 {
   // initialize correlationMap
-  grid_map::GridMap correlationMap({"correlation","rotationNCC","SSD","rotationSSD","SAD","rotationSAD", "MI", "rotationMI"});
+  grid_map::GridMap correlationMap({"NCC","rotationNCC","SSD","rotationSSD","SAD","rotationSAD", "MI", "rotationMI"});
   correlationMap.setGeometry(referenceMap_.getLength(), referenceMap_.getResolution(),
                               referenceMap_.getPosition()); //TODO only use submap
   correlationMap.setFrameId("grid_map");
@@ -189,9 +189,10 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
   double roll, pitch, yaw;
   m.getRPY(roll, pitch, yaw);
   float previous_templateRotation = templateRotation_;
-  templateRotation_ = 360 - fmod(yaw/M_PI*180+360,360);
+  templateRotation_ = 360.0 - fmod(yaw/M_PI*180+360,360);
   grid_map::Position shift = grid_map::Position(map_position_(0)-correct_position.getOrigin().x(), map_position_(1)-correct_position.getOrigin().y() );
 
+  ros::Time pubTime = ros::Time::now();
   ros::Time time = ros::Time::now();
   duration1_.sec = 0;
   duration1_.nsec = 0;
@@ -291,56 +292,20 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     }
   }
 
-  ros::Time pubTime = ros::Time::now();
   ros::Duration duration3;
   ros::Duration duration4;
   ros::Time time1 = ros::Time::now();
   if ((resample_ || !(SAD_ && SSD_ && NCC_ && MI_)) && !initialized_all)
   {
-    if (particleRowSAD_.size() < 4000) { correlationIncrement_ = 2; }
+    if (particleRowSAD_.size() < 4000) { correlationIncrement_ = 1; }
     else { correlationIncrement_ = 5; }
     if (SAD_)
     {
       std::vector<float> SAD;
       SAD.clear();
 
-      for (int i = 0; i < particleRowSAD_.size(); i++)
-      {
-        float row = float(particleRowSAD_[i])/subresolution;
-        float col = float(particleColSAD_[i])/subresolution;
-        grid_map::Index index = grid_map::Index(int(round(row)), int(round(col)));
-        int theta = particleThetaSAD_[i];
+      iterateParticles("SAD",subresolution,data,variance_data,reference_data,SAD,correlationMap,shift);
 
-        float sin_theta = sin((theta+templateRotation_)/180*M_PI);
-        float cos_theta = cos((theta+templateRotation_)/180*M_PI);
-
-        bool success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
-        if (success) 
-        {
-          float errSAD;
-          if (!weighted_) { errSAD = errorSAD(); }
-          else { errSAD = weightedErrorSAD(); }
-
-          SAD.push_back(errSAD);
-   
-          grid_map::Position xy_position;
-          referenceMap_.getPosition(index, xy_position);
-          if (correlationMap.isInside(xy_position-shift))
-          {
-            grid_map::Index correlation_index;
-            correlationMap.getIndex(xy_position-shift, correlation_index);
-
-            bool valid = correlationMap.isValid(correlation_index, "SAD");
-            // if no value so far or correlation smaller or correlation higher than for other thetas
-            if (((valid == false) || (errSAD*10 < correlationMap.at("SAD", correlation_index) ))) 
-            {
-              correlationMap.at("SAD", correlation_index) = errSAD*10;  //set correlation
-              correlationMap.at("rotationSAD", correlation_index) = theta;    //set theta
-            }
-          }
-        }
-        else { SAD.push_back(10); }
-      }
         // search best score 
       grid_map::Position best_pos;
 
@@ -446,50 +411,15 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     duration1_ += ros::Time::now() - time1;
     ros::Time time2 = ros::Time::now();
 
-    if (particleRowSSD_.size() < 4000) { correlationIncrement_ = 2; }
+    if (particleRowSSD_.size() < 4000) { correlationIncrement_ = 1; }
     else { correlationIncrement_ = 5; }
     if (SSD_)
     {
       std::vector<float> SSD;
       SSD.clear();
 
-      for (int i = 0; i < particleRowSSD_.size(); i++)
-      {
-        float row = float(particleRowSSD_[i])/subresolution;
-        float col = float(particleColSSD_[i])/subresolution;
-        grid_map::Index index = grid_map::Index(int(round(row)), int(round(col)));
-        int theta = particleThetaSSD_[i];
+      iterateParticles("SSD",subresolution,data,variance_data,reference_data,SSD,correlationMap,shift);
 
-        float sin_theta = sin((theta+templateRotation_)/180*M_PI);
-        float cos_theta = cos((theta+templateRotation_)/180*M_PI);
-
-        bool success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
-        if (success) 
-        {
-          float errSSD;
-          if (!weighted_) { errSSD = errorSSD(); }
-          else { errSSD = weightedErrorSSD(); }
-
-          SSD.push_back(errSSD);
-
-          grid_map::Position xy_position;
-          referenceMap_.getPosition(index, xy_position);
-          if (correlationMap.isInside(xy_position-shift))
-          {
-            grid_map::Index correlation_index;
-            correlationMap.getIndex(xy_position-shift, correlation_index);
-
-            bool valid = correlationMap.isValid(correlation_index, "SSD");
-            // if no value so far or correlation smaller or correlation higher than for other thetas
-            if (((valid == false) || (errSSD*50 < correlationMap.at("SSD", correlation_index) ))) 
-            {
-              correlationMap.at("SSD", correlation_index) = errSSD*50;  //set correlation
-              correlationMap.at("rotationSSD", correlation_index) = theta;    //set theta
-            }
-          }
-        }
-        else { SSD.push_back(10); }
-      }
         // search best score 
       grid_map::Position best_pos;
 
@@ -595,50 +525,15 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     duration2_ += ros::Time::now() - time2;
     ros::Time time3 = ros::Time::now();
 
-    if (particleRowNCC_.size() < 4000) { correlationIncrement_ = 2; }
+    if (particleRowNCC_.size() < 4000) { correlationIncrement_ = 1; }
     else { correlationIncrement_ = 5; }
     if (NCC_)
     {
       std::vector<float> NCC;
       NCC.clear();
 
-      for (int i = 0; i < particleRowNCC_.size(); i++)
-      {
-        float row = float(particleRowNCC_[i])/subresolution;
-        float col = float(particleColNCC_[i])/subresolution;
-        grid_map::Index index = grid_map::Index(int(round(row)), int(round(col)));
-        int theta = particleThetaNCC_[i];
+      iterateParticles("NCC",subresolution,data,variance_data,reference_data,NCC,correlationMap,shift);
 
-        float sin_theta = sin((theta+templateRotation_)/180*M_PI);
-        float cos_theta = cos((theta+templateRotation_)/180*M_PI);
-
-        bool success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
-        if (success) 
-        {
-          float corrNCC;
-          if (!weighted_) { corrNCC = correlationNCC(); }
-          else { corrNCC = weightedCorrelationNCC(); }
-
-          NCC.push_back(corrNCC);
-
-          grid_map::Position xy_position;
-          referenceMap_.getPosition(index, xy_position);
-          if (correlationMap.isInside(xy_position-shift))
-          {
-            grid_map::Index correlation_index;
-            correlationMap.getIndex(xy_position-shift, correlation_index);
-
-            bool valid = correlationMap.isValid(correlation_index, "correlation");
-            // if no value so far or correlation smaller or correlation higher than for other thetas
-            if (((valid == false) || (corrNCC-0.5 > correlationMap.at("correlation", correlation_index) )))// && fabs(theta - (360-int(templateRotation_))%360) < angleIncrement_) 
-            {
-              correlationMap.at("correlation", correlation_index) = corrNCC-0.5;  //set correlation
-              correlationMap.at("rotationNCC", correlation_index) = theta;    //set theta
-            }
-          }
-        }
-        else { NCC.push_back(-1); }
-      }
         // search best score 
       grid_map::Position best_pos;
 
@@ -744,7 +639,7 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
     duration3 = ros::Time::now() - time3;
     ros::Time time4 = ros::Time::now();
 
-    if (particleRowMI_.size() < 4000) { correlationIncrement_ = 2; }
+    if (particleRowMI_.size() < 4000) { correlationIncrement_ = 1; }
     else { correlationIncrement_ = 5; }
     if (MI_)
     {
@@ -755,43 +650,8 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       reference_min_ = referenceMap_.get("elevation").minCoeffOfFinites();
       reference_max_ = referenceMap_.get("elevation").maxCoeffOfFinites();
 
-      for (int i = 0; i < particleRowMI_.size(); i++)
-      {
-        float row = float(particleRowMI_[i])/subresolution;
-        float col = float(particleColMI_[i])/subresolution;
-        grid_map::Index index = grid_map::Index(int(round(row)), int(round(col)));
-        int theta = particleThetaMI_[i];
+      iterateParticles("MI",subresolution,data,variance_data,reference_data,MI,correlationMap,shift);
 
-        float sin_theta = sin((theta+templateRotation_)/180*M_PI);
-        float cos_theta = cos((theta+templateRotation_)/180*M_PI);
-
-        bool success = findMatchesEqual(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
-        if (success) 
-        {
-          float mutInfo;
-          if (!weighted_) { mutInfo = mutualInformation(); }
-          else { mutInfo = weightedMutualInformation(); }
-
-          MI.push_back(mutInfo);
-
-          grid_map::Position xy_position;
-          referenceMap_.getPosition(index, xy_position);
-          if (correlationMap.isInside(xy_position-shift))
-          {
-            grid_map::Index correlation_index;
-            correlationMap.getIndex(xy_position-shift, correlation_index);
-
-            bool valid = correlationMap.isValid(correlation_index, "MI");
-            // if no value so far or correlation smaller or correlation higher than for other thetas
-            if (((valid == false) || (mutInfo > correlationMap.at("MI", correlation_index) ))) 
-            {
-              correlationMap.at("MI", correlation_index) = mutInfo;  //set correlation
-              correlationMap.at("rotationMI", correlation_index) = theta;    //set theta
-            }
-          }
-        }
-        else { MI.push_back(-10); }
-      }
         // search best score 
       grid_map::Position best_pos;
 
@@ -915,72 +775,14 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
       float sin_theta = sin((theta+templateRotation_)/180*M_PI);
       float cos_theta = cos((theta+templateRotation_)/180*M_PI);
 
-      bool success = findMatchesEqual(data, variance_data, reference_data, row, col, sin_theta, cos_theta );
-      if (success)
-      {
-        float errSAD;
-        if (!weighted_) { errSAD = errorSAD(); }
-        else { errSAD = weightedErrorSAD(); }
+      bool success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta, true );
 
-        SAD.push_back(errSAD);
-
-        float errSSD;
-        if (!weighted_) { errSSD = errorSSD(); }
-        else { errSSD = weightedErrorSSD(); }
-
-        SSD.push_back(errSSD);
-
-        float corrNCC;
-        if (!weighted_) { corrNCC = correlationNCC(); }
-        else { corrNCC = weightedCorrelationNCC(); }
-
-        NCC.push_back(corrNCC);
-
-        float mutInfo;
-        if (!weighted_) { mutInfo = mutualInformation(); }
-        else { mutInfo = weightedMutualInformation(); }
-
-        MI.push_back(mutInfo);
- 
-        grid_map::Position xy_position;
-        referenceMap_.getPosition(index, xy_position);
-        if (correlationMap.isInside(xy_position-shift))
-        {
-          grid_map::Index correlation_index;
-          correlationMap.getIndex(xy_position-shift, correlation_index);
-
-          bool valid = correlationMap.isValid(correlation_index, "SAD");
-          // if no value so far or correlation smaller or correlation higher than for other thetas
-          if (((valid == false) || (errSAD*10 < correlationMap.at("SAD", correlation_index) ))) 
-          {
-            correlationMap.at("SAD", correlation_index) = errSAD*10;  //set correlation
-            correlationMap.at("rotationSAD", correlation_index) = theta;    //set theta
-          }
-          valid = correlationMap.isValid(correlation_index, "SSD");
-          // if no value so far or correlation smaller or correlation higher than for other thetas
-          if (((valid == false) || (errSSD*50 < correlationMap.at("SSD", correlation_index) ))) 
-          {
-            correlationMap.at("SSD", correlation_index) = errSSD*50;  //set correlation
-            correlationMap.at("rotationSSD", correlation_index) = theta;    //set theta
-          }
-          valid = correlationMap.isValid(correlation_index, "correlation");
-          // if no value so far or correlation smaller or correlation higher than for other thetas
-          if (((valid == false) || (corrNCC-0.5 > correlationMap.at("correlation", correlation_index) )))// && fabs(theta - (360-int(templateRotation_))%360) < angleIncrement_) 
-          {
-            correlationMap.at("correlation", correlation_index) = corrNCC-0.5;  //set correlation
-            correlationMap.at("rotationNCC", correlation_index) = theta;    //set theta
-          }
-          valid = correlationMap.isValid(correlation_index, "MI");
-          // if no value so far or correlation smaller or correlation higher than for other thetas
-          if (((valid == false) || (mutInfo > correlationMap.at("MI", correlation_index) ))) 
-          {
-            correlationMap.at("MI", correlation_index) = mutInfo;  //set correlation
-            correlationMap.at("rotationMI", correlation_index) = theta;    //set theta
-          }
-        }
-      }
-      else { SAD.push_back(10); SSD.push_back(10); NCC.push_back(-1); MI.push_back(-10);}
+      calculateSimilarity(success,"SAD",index,theta,SAD,correlationMap,shift);
+      calculateSimilarity(success,"SSD",index,theta,SSD,correlationMap,shift);
+      calculateSimilarity(success,"NCC",index,theta,NCC,correlationMap,shift);
+      calculateSimilarity(success,"MI",index,theta,MI,correlationMap,shift);
     }
+
       // search best score 
     grid_map::Position best_pos;
 
@@ -1369,6 +1171,83 @@ void MapFitter::exhaustiveSearch(grid_map::Index submap_start_index, grid_map::S
   isActive_ = false;
 }
 
+void MapFitter::iterateParticles(std::string score,int subresolution,grid_map::Matrix& data,grid_map::Matrix& variance_data,grid_map::Matrix& reference_data,std::vector<float>& scores,grid_map::GridMap& correlationMap,grid_map::Position& shift)
+{
+  std::map <std::string,std::vector<int>> rowMap;
+  rowMap["SAD"] = particleRowSAD_; rowMap["SSD"] = particleRowSSD_; rowMap["NCC"] = particleRowNCC_; rowMap["MI"] = particleRowMI_;
+  std::map <std::string,std::vector<int>> colMap;
+  colMap["SAD"] = particleColSAD_; colMap["SSD"] = particleColSSD_; colMap["NCC"] = particleColNCC_; colMap["MI"] = particleColMI_;
+  std::map <std::string,std::vector<int>> thetaMap;
+  thetaMap["SAD"] = particleThetaSAD_; thetaMap["SSD"] = particleThetaSSD_; thetaMap["NCC"] = particleThetaNCC_; thetaMap["MI"] = particleThetaMI_;
+
+  for (int i = 0; i < rowMap[score].size(); i++)
+  {
+    float row = float(rowMap[score][i])/subresolution;
+    float col = float(colMap[score][i])/subresolution;
+    grid_map::Index index = grid_map::Index(int(round(row)), int(round(col)));
+    int theta = thetaMap[score][i];
+
+    float sin_theta = sin((theta+templateRotation_)/180*M_PI);
+    float cos_theta = cos((theta+templateRotation_)/180*M_PI);
+
+    bool success;
+    if (score=="MI") { success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta, true ); }
+    else { success = findMatches(data, variance_data, reference_data, row, col, sin_theta, cos_theta, false ); }
+    
+    calculateSimilarity(success,score,index,theta,scores,correlationMap,shift);
+  }
+}
+
+void MapFitter::calculateSimilarity(bool success,std::string score,grid_map::Index index,int theta,std::vector<float>& scores,grid_map::GridMap& correlationMap,grid_map::Position& shift)
+{
+  if (success) 
+    {
+      float value;
+      if (!weighted_) 
+      { 
+        if(score=="SAD") {value = errorSAD();}
+        if(score=="SSD") {value = errorSSD();}
+        if(score=="NCC") {value = correlationNCC();}
+        if(score=="MI") {value = mutualInformation();}
+      }
+      else 
+      { 
+        if(score=="SAD") {value = weightedErrorSAD();}
+        if(score=="SSD") {value = weightedErrorSSD();}
+        if(score=="NCC") {value = weightedCorrelationNCC();}
+        if(score=="MI") {value = normalizedMutualInformation();}
+      }
+
+      scores.push_back(value);
+
+      grid_map::Position xy_position;
+      referenceMap_.getPosition(index, xy_position);
+      if (correlationMap.isInside(xy_position-shift))
+      {
+        grid_map::Index correlation_index;
+        correlationMap.getIndex(xy_position-shift, correlation_index);
+
+        bool valid = correlationMap.isValid(correlation_index, score);
+        // if no value so far or correlation smaller or correlation higher than for other thetas
+        if (((valid == false) || (value < correlationMap.at(score, correlation_index) ))) 
+        {
+          float alpha = 1;
+          if(score=="SAD") {alpha = 10;}
+          if(score=="SSD") {alpha = 50;}
+          correlationMap.at(score, correlation_index) = alpha*value;  //set correlation
+          correlationMap.at("rotation"+score, correlation_index) = theta;    //set theta
+        }
+      }
+    }
+    else 
+    { 
+      if(score=="SAD") {scores.push_back(noneSAD_);}
+      if(score=="SSD") {scores.push_back(noneSSD_);}
+      if(score=="NCC") {scores.push_back(noneNCC_);}
+      if(score=="MI") {scores.push_back(noneMI_);}
+    }
+}
+
 float MapFitter::findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data, float x, float y, int theta)
 {
   grid_map::Index reference_index;
@@ -1434,7 +1313,7 @@ float MapFitter::findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data,
   return reference_mean - shifted_mean;
 }
 
-bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, float row, float col, float sin_theta, float cos_theta)
+bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, float row, float col, float sin_theta, float cos_theta, bool equal)
 {
   // initialize
   int points = 0;
@@ -1501,122 +1380,57 @@ bool MapFitter::findMatches(grid_map::Matrix& data, grid_map::Matrix& variance_d
   // check if required overlap is fulfilled
   if (matches_ > points*requiredOverlap_) 
   { 
-    shifted_mean_ = shifted_mean_/matches_;
-    reference_mean_ = reference_mean_/matches_;
-    return true; 
-  }
-  else { return false; }
-}
-
-bool MapFitter::findMatchesEqual(grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, float row, float col, float sin_theta, float cos_theta)
-{
-  // initialize
-  int points = 0;
-  matches_ = 0;
-
-  shifted_mean_ = 0;
-  reference_mean_ = 0;
-  xy_shifted_.clear();
-  xy_reference_.clear();
-  xy_shifted_var_.clear();
-
-  Eigen::Array2i size = map_.getSize();
-  int size_x = size(0);
-  int size_y = size(1);
-  Eigen::Array2i start_index = map_.getStartIndex();
-  int start_index_x = start_index(0);
-  int start_index_y = start_index(1);
-  Eigen::Array2i reference_size = referenceMap_.getSize();
-  int reference_size_x = reference_size(0);
-  int reference_size_y = reference_size(1);
-  Eigen::Array2i reference_start_index = referenceMap_.getStartIndex();
-  int reference_start_index_x = reference_start_index(0);
-  int reference_start_index_y = reference_start_index(1);
-  float reference_index_x = row; //reference_index(0);
-  float reference_index_y = col; //reference_index(1);
-
-  for (int i = 0; i <= size_x-correlationIncrement_; i += correlationIncrement_)
-  {
-    for (int j = 0; j<= size_y-correlationIncrement_; j += correlationIncrement_)
+    if (equal)
     {
-      int index_x = (start_index_x + i) % size_x;
-      int index_y = (start_index_y + j) % size_y;
-
-      float mapHeight = data(index_x, index_y);
-      if (mapHeight == mapHeight)
+      //assure that we always have the same number of points
+      for (int f =0; f < size_x*size_y; f++)
       {
-        points += 1;
-        float reference_buffer_index_x = reference_size_x - reference_start_index_x + reference_index_x;
-        float reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
-
-        int shifted_index_x = round(fmod(reference_buffer_index_x, reference_size_x) - (cos_theta*(float(size_x)/2-i) - sin_theta*(float(size_y)/2-j)) );
-        int shifted_index_y = round(fmod(reference_buffer_index_y, reference_size_y) - (sin_theta*(float(size_x)/2-i) + cos_theta*(float(size_y)/2-j)) );
-              
-        if (shifted_index_x >= 0 && shifted_index_x < reference_size_x && shifted_index_y >= 0 && shifted_index_y < reference_size_y )
+        int index_x = round(static_cast <float> (rand() / static_cast <float> (RAND_MAX/(size_x-1)))); //rand() %size_x;
+        int index_y = round(static_cast <float> (rand() / static_cast <float> (RAND_MAX/(size_y-1)))); //rand() %size_y;
+        int i = (index_x - start_index_x + size_x) % size_x; 
+        int j = (index_y - start_index_y + size_y) % size_y; 
+        float mapHeight = data(index_x, index_y);
+        if (mapHeight == mapHeight)
         {
-          shifted_index_x = (shifted_index_x + reference_start_index_x) % reference_size_x;
-          shifted_index_y = (shifted_index_y + reference_start_index_y) % reference_size_y;
-          float referenceHeight = reference_data(shifted_index_x, shifted_index_y);
-          if (referenceHeight == referenceHeight)
+          float reference_buffer_index_x = reference_size_x - reference_start_index_x + reference_index_x;
+          float reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
+
+          int shifted_index_x = round(fmod(reference_buffer_index_x, reference_size_x) - (cos_theta*(float(size_x)/2-i) - sin_theta*(float(size_y)/2-j)) );
+          int shifted_index_y = round(fmod(reference_buffer_index_y, reference_size_y) - (sin_theta*(float(size_x)/2-i) + cos_theta*(float(size_y)/2-j)) );
+                
+          if (shifted_index_x >= 0 && shifted_index_x < reference_size_x && shifted_index_y >= 0 && shifted_index_y < reference_size_y )
           {
-            matches_ += 1;
-            shifted_mean_ += mapHeight;
-            reference_mean_ += referenceHeight;
-            xy_shifted_.push_back(mapHeight);
-            xy_reference_.push_back(referenceHeight);
-            float mapVariance = variance_data(index_x, index_y);
-            if (mapVariance < 1e-6) { mapVariance = 1e-6; }
-            xy_shifted_var_.push_back(mapVariance);
+            shifted_index_x = (shifted_index_x + reference_start_index_x) % reference_size_x;
+            shifted_index_y = (shifted_index_y + reference_start_index_y) % reference_size_y;
+            float referenceHeight = reference_data(shifted_index_x, shifted_index_y);
+            if (referenceHeight == referenceHeight)
+            {
+              matches_ += 1;
+              shifted_mean_ += mapHeight;
+              reference_mean_ += referenceHeight;
+              xy_shifted_.push_back(mapHeight);
+              xy_reference_.push_back(referenceHeight);
+              float mapVariance = variance_data(index_x, index_y);
+              if (mapVariance < 1e-6) { mapVariance = 1e-6; }
+              xy_shifted_var_.push_back(mapVariance);
+            }
           }
         }
-      }
-    }
-  }
-  // check if required overlap is fulfilled
-  if (matches_ > points*requiredOverlap_) 
-  { 
-    //assure that we always have the same number of points
-    for (int f =0; f < size_x*size_y; f++)
-    {
-      int index_x = round(static_cast <float> (rand() / static_cast <float> (RAND_MAX/(size_x-1)))); //rand() %size_x;
-      int index_y = round(static_cast <float> (rand() / static_cast <float> (RAND_MAX/(size_y-1)))); //rand() %size_y;
-      int i = (index_x - start_index_x + size_x) % size_x; 
-      int j = (index_y - start_index_y + size_y) % size_y; 
-      float mapHeight = data(index_x, index_y);
-      if (mapHeight == mapHeight)
-      {
-        float reference_buffer_index_x = reference_size_x - reference_start_index_x + reference_index_x;
-        float reference_buffer_index_y = reference_size_y - reference_start_index_y + reference_index_y;
-
-        int shifted_index_x = round(fmod(reference_buffer_index_x, reference_size_x) - (cos_theta*(float(size_x)/2-i) - sin_theta*(float(size_y)/2-j)) );
-        int shifted_index_y = round(fmod(reference_buffer_index_y, reference_size_y) - (sin_theta*(float(size_x)/2-i) + cos_theta*(float(size_y)/2-j)) );
-              
-        if (shifted_index_x >= 0 && shifted_index_x < reference_size_x && shifted_index_y >= 0 && shifted_index_y < reference_size_y )
+        if (matches_ == points)
         {
-          shifted_index_x = (shifted_index_x + reference_start_index_x) % reference_size_x;
-          shifted_index_y = (shifted_index_y + reference_start_index_y) % reference_size_y;
-          float referenceHeight = reference_data(shifted_index_x, shifted_index_y);
-          if (referenceHeight == referenceHeight)
-          {
-            matches_ += 1;
-            shifted_mean_ += mapHeight;
-            reference_mean_ += referenceHeight;
-            xy_shifted_.push_back(mapHeight);
-            xy_reference_.push_back(referenceHeight);
-            float mapVariance = variance_data(index_x, index_y);
-            if (mapVariance < 1e-6) { mapVariance = 1e-6; }
-            xy_shifted_var_.push_back(mapVariance);
-          }
+          shifted_mean_ = shifted_mean_/matches_;
+          reference_mean_ = reference_mean_/matches_;
+          return true; 
         }
       }
-      if (matches_ == points)
-      {
-        shifted_mean_ = shifted_mean_/matches_;
-        reference_mean_ = reference_mean_/matches_;
-        return true; 
-      }
+      return false;
     }
-    return false;
+    else
+    {
+      shifted_mean_ = shifted_mean_/matches_;
+      reference_mean_ = reference_mean_/matches_;
+      return true;
+    }
   }
   else { return false; }
 }
@@ -1715,7 +1529,7 @@ float MapFitter::mutualInformation()
   float maxHeight = map_max_;
   if (reference_max_ > maxHeight) { maxHeight = reference_max_; }
 
-  int numberOfBins = ceil((maxHeight - minHeight)/0.03); //128
+  int numberOfBins = ceil((maxHeight - minHeight)/0.03);
 
   float binWidth = (maxHeight - minHeight + 1e-6) / numberOfBins;
 
@@ -1747,7 +1561,6 @@ float MapFitter::mutualInformation()
   float entropy = 0;
   float referenceEntropy = 0;
   float jointEntropy = 0;
-  //int count = 0;
 
   for (int i = 0; i < numberOfBins; i++)
   {
@@ -1762,19 +1575,11 @@ float MapFitter::mutualInformation()
       }
     }
   }
-  //std::cout << " Mutual information: " << entropy+referenceEntropy-jointEntropy << " mean weight " << weightSum/count << std::endl;
-  //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
-  return (entropy+referenceEntropy)/jointEntropy;// /(entropy+referenceEntropy); // /jointEntropy; // /sqrt(entropy*referenceEntropy); //-jointEntropy;
+  return (entropy+referenceEntropy)-jointEntropy;
 }
 
-float MapFitter::weightedMutualInformation()
+float MapFitter::normalizedMutualInformation()
 {
-  /*float minHeight = map_min_ - shifted_mean_;
-  if ((reference_min_ - reference_mean_) < minHeight) { minHeight = reference_min_ - reference_mean_; }
-
-  float maxHeight = map_max_ - shifted_mean_;
-  if ((reference_max_ - reference_mean_) > maxHeight) { maxHeight = reference_max_ - reference_mean_; }*/
-
   float minHeight = map_min_;
   if (reference_min_ < minHeight) { minHeight = reference_min_; }
 
@@ -1803,8 +1608,6 @@ float MapFitter::weightedMutualInformation()
 
   for (int i = 0; i < matches_; i++)
   {
-    //int i1 = (xy_shifted_[i] - shifted_mean_ - minHeight) / binWidth;
-    //int i2 = (xy_reference_[i] - reference_mean_ - minHeight) / binWidth;
     int i1 = (xy_shifted_[i] - minHeight) / binWidth;
     int i2 = (xy_reference_[i] - minHeight) / binWidth;
     hist[i1] += 1.0/matches_;
@@ -1816,7 +1619,6 @@ float MapFitter::weightedMutualInformation()
   float referenceEntropy = 0;
   float jointEntropy = 0;
   float weightSum = 0;
-  //int count = 0;
 
   for (int i = 0; i < numberOfBins; i++)
   {
@@ -1828,17 +1630,11 @@ float MapFitter::weightedMutualInformation()
       if (jointHist[i][j]!=0.0) 
       { 
         jointEntropy += -jointHist[i][j]*log2(jointHist[i][j]);
-        weightSum += (numberOfBins-abs(i-j))*jointHist[i][j]; //*(numberOfBins-abs(i-j))
-        //jointEntropy += -float(abs(i-j))/12*jointHist[i][j]*log(jointHist[i][j]);
-        //weightSum += float(abs(i-j));
-        //count++;
+        weightSum += (numberOfBins-abs(i-j))*jointHist[i][j];
       }
     }
   }
-  //jointEntropy = jointEntropy / ( weightSum / (numberOfBins) ); //*numberOfBins
-  //std::cout << " Mutual information: " << entropy+referenceEntropy-jointEntropy << " mean weight " << weightSum/count << std::endl;
-  //std::cout << " template entropy: " << entropy << " reference entropy: " << referenceEntropy << " joint entropy: " << jointEntropy << " Mutual information: " << entropy+referenceEntropy-jointEntropy <<std::endl;
-  return (entropy+referenceEntropy)/jointEntropy;// /(entropy+referenceEntropy); // /jointEntropy; // /sqrt(entropy*referenceEntropy); //-jointEntropy;
+  return (entropy+referenceEntropy)/jointEntropy;
 }
 
 void MapFitter::tfBroadcast(const ros::TimerEvent&) 
@@ -1856,12 +1652,12 @@ void MapFitter::tfListener(const ros::TimerEvent&)
   double roll, pitch, yaw;
   m.getRPY(roll, pitch, yaw);
 
-  ros::Time pubTime = ros::Time::now();
+  ros::Time pubTime2 = ros::Time::now();
   geometry_msgs::PointStamped correctPoint;
   correctPoint.point.x = position.getOrigin().x();
   correctPoint.point.y = position.getOrigin().y();
   correctPoint.point.z = fmod(yaw/M_PI*180+360, 360);
-  correctPoint.header.stamp = pubTime;
+  correctPoint.header.stamp = pubTime2;
   correctPointPublisher_.publish(correctPoint);
 }
 
