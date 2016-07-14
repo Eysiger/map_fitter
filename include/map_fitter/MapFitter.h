@@ -187,11 +187,11 @@ private:
     ros::Publisher correctPointPublisher_;
 
 
-    float cumulativeErrorCorr_;
+    float cumulativeErrorNCC_;
     float cumulativeErrorSSD_;
     float cumulativeErrorSAD_;
     float cumulativeErrorMI_;
-    int correctMatchesCorr_;
+    int correctMatchesNCC_;
     int correctMatchesSSD_;
     int correctMatchesSAD_;
     int correctMatchesMI_;
@@ -228,6 +228,11 @@ private:
     int noneSSD_ = 10;
     int noneNCC_ = -1;
     int noneMI_ = -10; //change to 0
+
+    float rhoSAD_;
+    float rhoSSD_;
+    float rhoNCC_;
+    float rhoMI_;
 
     ros::Duration duration1_;
     ros::Duration duration2_;
