@@ -51,11 +51,10 @@ public:
     void iterateParticles(std::string score, int subresolution, grid_map::Matrix& data, grid_map::Matrix& variance_data, grid_map::Matrix& reference_data, std::vector<float>& scores, grid_map::GridMap& correlationMap, grid_map::Position& shift);
     void calculateSimilarity(bool success, std::string score, grid_map::Index index, int theta, std::vector<float>& scores, grid_map::GridMap& correlationMap, grid_map::Position& shift);
 
-    //doesn't work - motion does not get updated
-    //void motionUpdate(std::string score, grid_map::Position previous_position, float previous_templateRotation, int subresolution, std::normal_distribution<float>& distribution);
     void publishPoint(std::string score, std::vector<float>& bestPos, grid_map::Position& shift, ros::Time pubTime);
+    void cumErrorAndCorrMatches(std::string score, std::vector<float> bestPos);
 
-    std::vector<std::vector<int>> resample(std::string score, std::vector<float> bestPos, std::vector<float> scores, std::normal_distribution<float>& distribution, int subresolution);
+    void resample(std::string score, std::vector<float> bestPos, std::vector<float> scores, std::normal_distribution<float>& distribution, int subresolution);
 
     std::vector<float> findBestPos(std::string score, std::vector<float> scores, int subresolution);
     float findZ(grid_map::Matrix& data, grid_map::Matrix& reference_data, float x, float y, int theta);
@@ -233,6 +232,8 @@ private:
     float rhoSSD_;
     float rhoNCC_;
     float rhoMI_;
+
+    int numberOfParticles_;
 
     ros::Duration duration1_;
     ros::Duration duration2_;
